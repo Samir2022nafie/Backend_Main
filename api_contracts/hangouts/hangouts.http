@@ -1,0 +1,157 @@
+### Variables
+@baseUrl = http://localhost:3000/api/v1
+@authToken = your_bearer_token_here
+@hangoutId = h1h2h3h4-1111-2222-3333-444455556666
+@targetUserId = u1u2u3u4-1111-2222-3333-444455556666
+@communityId = c1c2c3c4-1111-2222-3333-444455556666
+
+###
+# @name CreateHangout
+# Create standalone or community-tied hangout (immediately live, creator auto-joins)
+POST {{baseUrl}}/hangouts
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Casual Friday Coffee & Code",
+  "description": "Drop in, bring your laptop, and let's hack together.",
+  "startsAt": "2026-10-20T14:00:00.000Z",
+  "endsAt": "2026-10-20T17:00:00.000Z",
+  "visibility": "public",
+  "joinType": "open",
+  "maxParticipants": 15
+}
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "id": "h1h2h3h4-1111-2222-3333-444455556666",
+#     "communityId": null,
+#     "title": "Casual Friday Coffee & Code",
+#     "description": "Drop in, bring your laptop, and let's hack together.",
+#     "coverImageUrl": null,
+#     "startsAt": "2026-10-20T14:00:00.000Z",
+#     "endsAt": "2026-10-20T17:00:00.000Z",
+#     "visibility": "public",
+#     "joinType": "open",
+#     "maxParticipants": 15,
+#     "creator": {
+#       "id": "5ee949e8-b14b-4a26-be3e-16a444b8599d",
+#       "username": "johndoe",
+#       "name": "John Doe",
+#       "first_name": "John",
+#       "last_name": "Doe",
+#       "profile_picture_url": null
+#     },
+#     "participantsCount": 1,
+#     "isParticipant": true,
+#     "isSaved": false
+#   }
+# }
+
+###
+# @name ListHangouts
+# List public hangouts (respects blocks and soft delete)
+GET {{baseUrl}}/hangouts?page=1&limit=20
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+###
+# @name GetSingleHangout
+# Get single hangout details (participants preview, pending requests for creator)
+GET {{baseUrl}}/hangouts/{{hangoutId}}
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+###
+# @name UpdateHangout
+# Update hangout details (Creator only)
+PATCH {{baseUrl}}/hangouts/{{hangoutId}}
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Casual Friday Coffee & Code (Extended)",
+  "maxParticipants": 20
+}
+
+###
+# @name JoinHangout
+# Join an open hangout
+POST {{baseUrl}}/hangouts/{{hangoutId}}/join
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "joined": true,
+#     "participantsCount": 2
+#   }
+# }
+
+###
+# @name LeaveHangout
+# Leave a hangout
+POST {{baseUrl}}/hangouts/{{hangoutId}}/leave
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+###
+# @name RequestJoinHangout
+# Request to join a request_based hangout
+POST {{baseUrl}}/hangouts/{{hangoutId}}/request
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "requested": true,
+#     "status": "pending"
+#   }
+# }
+
+###
+# @name RespondJoinRequest
+# Creator approves or rejects join request
+PATCH {{baseUrl}}/hangouts/{{hangoutId}}/requests/{{targetUserId}}
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "status": "approved"
+}
+
+###
+# @name BanUserFromHangout
+# Ban user from hangout (Creator OR Community leadership if community-tied)
+POST {{baseUrl}}/hangouts/{{hangoutId}}/ban
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "userId": "{{targetUserId}}",
+  "reason": "Inappropriate messages."
+}
+
+###
+# @name ToggleSaveHangout
+# Toggle bookmark on hangout
+POST {{baseUrl}}/hangouts/{{hangoutId}}/save
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+###
+# @name SoftDeleteHangout
+# Soft delete hangout (Creator OR Community leadership if community-tied)
+DELETE {{baseUrl}}/hangouts/{{hangoutId}}
+Authorization: Bearer {{authToken}}
+Accept: application/json

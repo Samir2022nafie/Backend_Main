@@ -1,0 +1,249 @@
+### Variables
+@baseUrl = http://localhost:3000/api/v1
+@authToken = your_bearer_token_here
+@postId = b1c2d3e4-1111-2222-3333-444455556666
+@commentId = c1c2c3c4-1111-2222-3333-444455556666
+
+###
+# @name CreateComment
+# Create a comment on a post (Member+ only)
+POST {{baseUrl}}/posts/{{postId}}/comments
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "content": "Is there a clean water source near the 5km milestone?"
+}
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "id": "c1c2c3c4-1111-2222-3333-444455556666",
+#     "postId": "b1c2d3e4-1111-2222-3333-444455556666",
+#     "parentCommentId": null,
+#     "content": "Is there a clean water source near the 5km milestone?",
+#     "createdAt": "2026-09-03T05:30:00.000Z",
+#     "updatedAt": "2026-09-03T05:30:00.000Z",
+#     "author": {
+#       "id": "5ee949e8-b14b-4a26-be3e-16a444b8599d",
+#       "username": "johndoe",
+#       "name": "John Doe",
+#       "first_name": "John",
+#       "last_name": "Doe",
+#       "profile_picture_url": null
+#     },
+#     "reactionCount": 0,
+#     "hasReacted": false
+#   }
+# }
+
+###
+# @name CreateReply
+# Create a direct reply to an existing comment
+POST {{baseUrl}}/posts/{{postId}}/comments
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "content": "Yes, there is a natural spring about 200m to the right of the fork.",
+  "parentCommentId": "{{commentId}}"
+}
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "id": "d1d2d3d4-1111-2222-3333-444455556666",
+#     "postId": "b1c2d3e4-1111-2222-3333-444455556666",
+#     "parentCommentId": "c1c2c3c4-1111-2222-3333-444455556666",
+#     "content": "Yes, there is a natural spring about 200m to the right of the fork.",
+#     "createdAt": "2026-09-03T05:31:00.000Z",
+#     "updatedAt": "2026-09-03T05:31:00.000Z",
+#     "author": {
+#       "id": "57388a43-17fd-4ba9-9de8-dc0686380206",
+#       "username": "janesmith",
+#       "name": "Jane Smith",
+#       "first_name": "Jane",
+#       "last_name": "Smith",
+#       "profile_picture_url": null
+#     },
+#     "reactionCount": 0,
+#     "hasReacted": false
+#   }
+# }
+
+### Error Example: 403 Forbidden (Non-member attempts to comment)
+# {
+#   "success": false,
+#   "error": {
+#     "code": "FORBIDDEN",
+#     "message": "Only community members can comment on posts"
+#   }
+# }
+
+###
+# @name ListPostComments
+# List comments for post (top-level + direct replies, 2-level hierarchy)
+GET {{baseUrl}}/posts/{{postId}}/comments?page=1&limit=20
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": [
+#     {
+#       "id": "c1c2c3c4-1111-2222-3333-444455556666",
+#       "postId": "b1c2d3e4-1111-2222-3333-444455556666",
+#       "parentCommentId": null,
+#       "content": "Is there a clean water source near the 5km milestone?",
+#       "createdAt": "2026-09-03T05:30:00.000Z",
+#       "updatedAt": "2026-09-03T05:30:00.000Z",
+#       "author": {
+#         "id": "5ee949e8-b14b-4a26-be3e-16a444b8599d",
+#         "username": "johndoe",
+#         "name": "John Doe",
+#         "first_name": "John",
+#         "last_name": "Doe",
+#         "profile_picture_url": null
+#       },
+#       "reactionCount": 2,
+#       "hasReacted": true,
+#       "replyCount": 1,
+#       "replies": [
+#         {
+#           "id": "d1d2d3d4-1111-2222-3333-444455556666",
+#           "postId": "b1c2d3e4-1111-2222-3333-444455556666",
+#           "parentCommentId": "c1c2c3c4-1111-2222-3333-444455556666",
+#           "content": "Yes, there is a natural spring about 200m to the right of the fork.",
+#           "createdAt": "2026-09-03T05:31:00.000Z",
+#           "updatedAt": "2026-09-03T05:31:00.000Z",
+#           "author": {
+#             "id": "57388a43-17fd-4ba9-9de8-dc0686380206",
+#             "username": "janesmith",
+#             "name": "Jane Smith",
+#             "first_name": "Jane",
+#             "last_name": "Smith",
+#             "profile_picture_url": null
+#           },
+#           "reactionCount": 1,
+#           "hasReacted": false
+#         }
+#       ]
+#     }
+#   ],
+#   "meta": {
+#     "page": 1,
+#     "limit": 20,
+#     "total": 1,
+#     "totalPages": 1
+#   }
+# }
+
+###
+# @name GetSingleComment
+# Get single comment by ID
+GET {{baseUrl}}/comments/{{commentId}}
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": {
+#     "id": "c1c2c3c4-1111-2222-3333-444455556666",
+#     "postId": "b1c2d3e4-1111-2222-3333-444455556666",
+#     "parentCommentId": null,
+#     "content": "Is there a clean water source near the 5km milestone?",
+#     "createdAt": "2026-09-03T05:30:00.000Z",
+#     "updatedAt": "2026-09-03T05:30:00.000Z",
+#     "author": {
+#       "id": "5ee949e8-b14b-4a26-be3e-16a444b8599d",
+#       "username": "johndoe",
+#       "name": "John Doe",
+#       "first_name": "John",
+#       "last_name": "Doe",
+#       "profile_picture_url": null
+#     },
+#     "reactionCount": 2,
+#     "hasReacted": true,
+#     "replyCount": 1,
+#     "replies": []
+#   }
+# }
+
+###
+# @name UpdateComment
+# Update comment content (Author only)
+PATCH {{baseUrl}}/comments/{{commentId}}
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "content": "Is there a clean water source near the 5km milestone? (Clarification: potable)"
+}
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": {
+#     "id": "c1c2c3c4-1111-2222-3333-444455556666",
+#     "postId": "b1c2d3e4-1111-2222-3333-444455556666",
+#     "parentCommentId": null,
+#     "content": "Is there a clean water source near the 5km milestone? (Clarification: potable)",
+#     "createdAt": "2026-09-03T05:30:00.000Z",
+#     "updatedAt": "2026-09-03T05:35:00.000Z",
+#     "author": {
+#       "id": "5ee949e8-b14b-4a26-be3e-16a444b8599d",
+#       "username": "johndoe",
+#       "name": "John Doe",
+#       "first_name": "John",
+#       "last_name": "Doe",
+#       "profile_picture_url": null
+#     }
+#   }
+# }
+
+### Error Example: 403 Forbidden (Non-author attempts update)
+# {
+#   "success": false,
+#   "error": {
+#     "code": "FORBIDDEN",
+#     "message": "Only the author can update this comment"
+#   }
+# }
+
+###
+# @name ToggleCommentReaction
+# Toggle reaction (like) on comment
+POST {{baseUrl}}/comments/{{commentId}}/react
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "reacted": true,
+#     "reactionCount": 3
+#   }
+# }
+
+###
+# @name DeleteComment
+# Soft delete comment (Author OR Admin/Mod/Owner of community via CASL)
+DELETE {{baseUrl}}/comments/{{commentId}}
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": {
+#     "success": true
+#   }
+# }

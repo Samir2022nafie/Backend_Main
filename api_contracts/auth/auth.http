@@ -1,0 +1,238 @@
+### Variables
+@baseUrl = http://localhost:3000/api/v1
+@authToken = your_bearer_token_here
+@botSecret = your_bot_webhook_secret_here
+
+###
+# @name Register
+# Register new user with email and/or phone number (Age >= 13 required)
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+Accept: application/json
+
+{
+  "username": "johndoe",
+  "email": "john.doe@example.com",
+  "phoneNumber": "+251911223344",
+  "password": "SuperSecretPassword123!",
+  "firstName": "John",
+  "lastName": "Doe",
+  "birthDate": "1998-04-12"
+}
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "user": {
+#       "id": "5ee949e8-b14b-4a26-be3e-16a444b8599d",
+#       "username": "johndoe",
+#       "email": "john.doe@example.com",
+#       "phone_number": "+251911223344",
+#       "phone_verified_at": null,
+#       "first_name": "John",
+#       "last_name": "Doe",
+#       "name": "John Doe",
+#       "birth_date": "1998-04-12T00:00:00.000Z",
+#       "trust_score": 50,
+#       "created_at": "2026-09-03T01:00:00.000Z",
+#       "updated_at": "2026-09-03T01:00:00.000Z",
+#       "deleted_at": null
+#     },
+#     "token": "090643aaf4f07369894ad4301cc4ef72e2542e3f97979608282c5f7efdab54a2"
+#   }
+# }
+
+### Error Example: 400 Validation Error (Age < 13)
+# {
+#   "success": false,
+#   "error": {
+#     "code": "VALIDATION_ERROR",
+#     "message": "Validation failed",
+#     "details": [
+#       {
+#         "code": "custom",
+#         "message": "User must be at least 13 years old",
+#         "path": ["birthDate"]
+#       }
+#     ]
+#   }
+# }
+
+###
+# @name LoginWithEmail
+# Login with email and password
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "identifier": "john.doe@example.com",
+  "password": "SuperSecretPassword123!"
+}
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "user": {
+#       "id": "5ee949e8-b14b-4a26-be3e-16a444b8599d",
+#       "username": "johndoe",
+#       "email": "john.doe@example.com"
+#     },
+#     "token": "090643aaf4f07369894ad4301cc4ef72e2542e3f97979608282c5f7efdab54a2"
+#   }
+# }
+
+###
+# @name LoginWithPhone
+# Login with verified phone number (Unverified phone will return 401)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "identifier": "+251911223344",
+  "password": "SuperSecretPassword123!"
+}
+
+### Error Example: 401 Unauthorized (Invalid credentials or unverified phone)
+# {
+#   "success": false,
+#   "error": {
+#     "code": "UNAUTHORIZED",
+#     "message": "Invalid credentials"
+#   }
+# }
+
+###
+# @name RequestPhoneVerification
+# Request 6-digit OTP for phone verification
+POST {{baseUrl}}/auth/verify-phone
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "phoneNumber": "+251911223344"
+}
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "success": true,
+#     "message": "OTP sent successfully"
+#   }
+# }
+
+###
+# @name ConfirmPhoneVerification
+# Validate OTP and mark phone number verified
+POST {{baseUrl}}/auth/verify-phone/confirm
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "phoneNumber": "+251911223344",
+  "otp": "123456"
+}
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "success": true
+#   }
+# }
+
+### Error Example: 400 Bad Request (Invalid or expired OTP)
+# {
+#   "success": false,
+#   "error": {
+#     "code": "VALIDATION_ERROR",
+#     "message": "Invalid or expired OTP code"
+#   }
+# }
+
+###
+# @name OAuthLogin
+# Login or signup via Google / Apple / Telegram
+POST {{baseUrl}}/auth/oauth/google
+Content-Type: application/json
+Accept: application/json
+
+{
+  "idToken": "google_id_token_jwt_string_here",
+  "email": "john.oauth@example.com",
+  "birthDate": "1998-04-12"
+}
+
+### Error Example: 409 Conflict (Account exists but not linked)
+# {
+#   "success": false,
+#   "error": {
+#     "code": "ACCOUNT_EXISTS_NOT_LINKED",
+#     "message": "Account with this email already exists. Please link it explicitly."
+#   }
+# }
+
+###
+# @name LinkExternalProvider
+# Link Google / Apple / Telegram to current authenticated account
+POST {{baseUrl}}/auth/link-external
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "provider": "google",
+  "idToken": "google_id_token_jwt_string_here"
+}
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "linkedProviders": ["credential", "google"]
+#   }
+# }
+
+###
+# @name Logout
+# Revoke active bearer token
+POST {{baseUrl}}/auth/logout
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "success": true
+#   }
+# }
+
+###
+# @name BotWebhook
+# Webhook handler for Telegram/WhatsApp bots (v1.2 dormant feature)
+POST {{baseUrl}}/auth/bot/telegram
+x-bot-webhook-secret: {{botSecret}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "update_id": 100024,
+  "message": {
+    "text": "/start"
+  }
+}
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "acknowledged": true
+#   }
+# }

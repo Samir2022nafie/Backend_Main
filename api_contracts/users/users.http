@@ -1,0 +1,100 @@
+### Variables
+@baseUrl = http://localhost:3000/api/v1
+@authToken = your_bearer_token_here
+
+###
+# @name GetMyManagedCommunities
+# List all communities where current user is Owner, Admin, or Moderator (Feeds Dashboard Home & Mobile Switcher)
+GET {{baseUrl}}/users/me/communities
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": [
+#     {
+#       "id": "9b706d01-7c43-4e2e-a158-372beccc3d22",
+#       "name": "Outdoor Explorers",
+#       "slug": "outdoor-explorers",
+#       "description": "A community for outdoor enthusiasts, hikers, and campers.",
+#       "bannerUrl": null,
+#       "profilePictureUrl": null,
+#       "isPrivate": false,
+#       "memberCount": 14,
+#       "role": "owner"
+#     }
+#   ]
+# }
+
+###
+# @name GetMyProfile
+# Get current authenticated user profile
+GET {{baseUrl}}/users/me
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": {
+#     "id": "5ee949e8-b14b-4a26-be3e-16a444b8599d",
+#     "username": "johndoe",
+#     "email": "john.doe@example.com",
+#     "phone_number": "+251911223344",
+#     "first_name": "John",
+#     "last_name": "Doe",
+#     "name": "John Doe",
+#     "birth_date": "1998-04-12T00:00:00.000Z",
+#     "bio": "Hiking enthusiast and photographer.",
+#     "profile_picture_url": "https://example.com/avatar.jpg",
+#     "trust_score": 50,
+#     "created_at": "2026-09-03T01:00:00.000Z",
+#     "updated_at": "2026-09-03T01:00:00.000Z",
+#     "deleted_at": null
+#   }
+# }
+
+###
+# @name UpdateMyProfile
+# Update current authenticated user profile
+PATCH {{baseUrl}}/users/me
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "firstName": "Johnny",
+  "lastName": "Doe",
+  "bio": "Trail runner, rock climber, and weekend camper.",
+  "profilePictureUrl": "https://example.com/new-avatar.jpg"
+}
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": {
+#     "id": "5ee949e8-b14b-4a26-be3e-16a444b8599d",
+#     "username": "johndoe",
+#     "first_name": "Johnny",
+#     "last_name": "Doe",
+#     "name": "Johnny Doe",
+#     "bio": "Trail runner, rock climber, and weekend camper.",
+#     "profile_picture_url": "https://example.com/new-avatar.jpg"
+#   }
+# }
+
+###
+# @name SoftDeleteMyAccount
+# Soft-delete current authenticated user account and revoke all sessions
+DELETE {{baseUrl}}/users/me
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": {
+#     "success": true
+#   }
+# }

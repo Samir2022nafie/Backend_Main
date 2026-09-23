@@ -1,0 +1,179 @@
+### Variables
+@baseUrl = http://localhost:3000/api/v1
+@authToken = your_bearer_token_here
+@targetUserId = 11111111-2222-3333-4444-555566667777
+@notificationId = n1n2n3n4-1111-2222-3333-444455556666
+
+###
+# @name GetPublicProfile
+# Get public profile of a user (returns 404 if blocked in either direction or soft-deleted)
+GET {{baseUrl}}/users/{{targetUserId}}
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": {
+#     "id": "11111111-2222-3333-4444-555566667777",
+#     "username": "alice_w",
+#     "name": "Alice Wonderland",
+#     "firstName": "Alice",
+#     "lastName": "Wonderland",
+#     "bio": "Art enthusiast & curator",
+#     "profilePictureUrl": null,
+#     "createdAt": "2026-10-01T10:00:00.000Z",
+#     "stats": {
+#       "followersCount": 12,
+#       "followingCount": 5,
+#       "communitiesCount": 3
+#     },
+#     "isFollowing": false
+#   }
+# }
+
+###
+# @name FollowUser
+# Follow target user (sends notification, rejects self-follow and blocked users)
+POST {{baseUrl}}/users/{{targetUserId}}/follow
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "following": true
+#   }
+# }
+
+###
+# @name UnfollowUser
+# Unfollow target user
+DELETE {{baseUrl}}/users/{{targetUserId}}/follow
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": {
+#     "following": false
+#   }
+# }
+
+###
+# @name BlockUser
+# Block target user (automatically removes mutual follows in both directions)
+POST {{baseUrl}}/users/{{targetUserId}}/block
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "blocked": true
+#   }
+# }
+
+###
+# @name UnblockUser
+# Unblock target user
+DELETE {{baseUrl}}/users/{{targetUserId}}/block
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": {
+#     "blocked": false
+#   }
+# }
+
+###
+# @name GetTrustScore
+# Get user trust score and display tier (Trusted >= 80, Member >= 50, New < 50)
+GET {{baseUrl}}/users/{{targetUserId}}/trust-score
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": {
+#     "trustScore": 85,
+#     "tier": "Trusted"
+#   }
+# }
+
+###
+# @name ListNotifications
+# List caller's notifications with optional unreadOnly filter
+GET {{baseUrl}}/notifications?page=1&limit=20&unreadOnly=true
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": [
+#     {
+#       "id": "n1n2n3n4-1111-2222-3333-444455556666",
+#       "userId": "caller_user_id",
+#       "type": "follow",
+#       "title": "New Follower",
+#       "message": "Someone started following you.",
+#       "relatedEntityType": "user",
+#       "relatedEntityId": "11111111-2222-3333-4444-555566667777",
+#       "isRead": false,
+#       "createdAt": "2026-10-15T12:00:00.000Z"
+#     }
+#   ],
+#   "meta": {
+#     "page": 1,
+#     "limit": 20,
+#     "total": 1,
+#     "totalPages": 1
+#   }
+# }
+
+###
+# @name MarkNotificationRead
+# Mark a notification as read
+PATCH {{baseUrl}}/notifications/{{notificationId}}/read
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": {
+#     "id": "n1n2n3n4-1111-2222-3333-444455556666",
+#     "isRead": true
+#   }
+# }
+
+###
+# @name GetPresignedUploadUrl
+# Generate a presigned direct-to-storage upload URL
+POST {{baseUrl}}/upload/presigned
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "filename": "community_banner.webp",
+  "contentType": "image/webp"
+}
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "uploadUrl": "https://storage.hobbyhub.local/uploads/u1-community_banner.webp?signature=...",
+#     "publicUrl": "https://storage.hobbyhub.local/uploads/u1-community_banner.webp",
+#     "key": "uploads/u1-community_banner.webp"
+#   }
+# }

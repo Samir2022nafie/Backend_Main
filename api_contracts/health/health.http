@@ -1,0 +1,19 @@
+### Variables
+@baseUrl = http://localhost:3000/api/v1
+
+###
+# @name HealthCheck
+# Check service health and database connectivity
+GET {{baseUrl}}/health
+Accept: application/json
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": {
+#     "status": "ok",
+#     "timestamp": "2026-09-03T01:00:00.000Z",
+#     "database": "connected",
+#     "uptime": 12.345
+#   }
+# }

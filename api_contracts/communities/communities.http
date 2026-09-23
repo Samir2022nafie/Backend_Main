@@ -1,0 +1,322 @@
+### Variables
+@baseUrl = http://localhost:3000/api/v1
+@authToken = your_bearer_token_here
+@categoryId = 1a55efee-d85e-4dab-b299-8984d9841ebf
+@communitySlug = outdoor-explorers
+
+###
+# @name CreateCommunity
+# Create a new community (Creator is automatically assigned admin/owner member)
+POST {{baseUrl}}/communities
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Outdoor Explorers",
+  "slug": "outdoor-explorers",
+  "description": "A community for outdoor enthusiasts, hikers, and campers.",
+  "rules": "1. Leave no trace.\n2. Respect fellow campers.",
+  "categoryId": "{{categoryId}}",
+  "bannerUrl": "https://example.com/banner.jpg",
+  "profilePictureUrl": "https://example.com/avatar.jpg",
+  "isPrivate": false
+}
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "id": "9b706d01-7c43-4e2e-a158-372beccc3d22",
+#     "name": "Outdoor Explorers",
+#     "slug": "outdoor-explorers",
+#     "description": "A community for outdoor enthusiasts, hikers, and campers.",
+#     "rules": "1. Leave no trace.\n2. Respect fellow campers.",
+#     "creator_id": "5ee949e8-b14b-4a26-be3e-16a444b8599d",
+#     "location_id": null,
+#     "category_id": "1a55efee-d85e-4dab-b299-8984d9841ebf",
+#     "banner_url": "https://example.com/banner.jpg",
+#     "profile_picture_url": "https://example.com/avatar.jpg",
+#     "is_private": false,
+#     "created_at": "2026-09-03T01:00:00.000Z",
+#     "updated_at": "2026-09-03T01:00:00.000Z",
+#     "deleted_at": null,
+#     "category": {
+#       "id": "1a55efee-d85e-4dab-b299-8984d9841ebf",
+#       "name": "outdoor_adventure"
+#     }
+#   }
+# }
+
+### Error Example: 409 Conflict (Slug already in use)
+# {
+#   "success": false,
+#   "error": {
+#     "code": "CONFLICT",
+#     "message": "A community with this slug already exists"
+#   }
+# }
+
+###
+# @name ListCommunities
+# List public communities with pagination, category filter, and keyword search
+GET {{baseUrl}}/communities?page=1&limit=20&categoryId={{categoryId}}&q=outdoor
+Accept: application/json
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": [
+#     {
+#       "id": "9b706d01-7c43-4e2e-a158-372beccc3d22",
+#       "name": "Outdoor Explorers",
+#       "slug": "outdoor-explorers",
+#       "description": "A community for outdoor enthusiasts, hikers, and campers.",
+#       "is_private": false,
+#       "memberCount": 14,
+#       "isMember": false,
+#       "myRole": null,
+#       "category": {
+#         "id": "1a55efee-d85e-4dab-b299-8984d9841ebf",
+#         "name": "outdoor_adventure"
+#       }
+#     }
+#   ],
+#   "meta": {
+#     "page": 1,
+#     "limit": 20,
+#     "total": 1,
+#     "totalPages": 1
+#   }
+# }
+
+###
+# @name GetCommunityBySlug
+# Get single community details (Public if not private; Members-only if private)
+GET {{baseUrl}}/communities/{{communitySlug}}
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": {
+#     "id": "9b706d01-7c43-4e2e-a158-372beccc3d22",
+#     "name": "Outdoor Explorers",
+#     "slug": "outdoor-explorers",
+#     "description": "A community for outdoor enthusiasts, hikers, and campers.",
+#     "is_private": false,
+#     "memberCount": 14,
+#     "isMember": true,
+#     "myRole": "owner",
+#     "category": {
+#       "id": "1a55efee-d85e-4dab-b299-8984d9841ebf",
+#       "name": "outdoor_adventure"
+#     }
+#   }
+# }
+
+### Error Example: 403 Forbidden (Private community access without membership)
+# {
+#   "success": false,
+#   "error": {
+#     "code": "FORBIDDEN",
+#     "message": "This community is private. You must be an active member to view its content."
+#   }
+# }
+
+###
+# @name UpdateCommunity
+# Update community settings (Owner only; slug and categoryId cannot be modified)
+PATCH {{baseUrl}}/communities/{{communitySlug}}
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Outdoor Explorers Club",
+  "description": "Updated description with new hiking trail schedules.",
+  "rules": "Be kind and respectful at all times.",
+  "isPrivate": false
+}
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": {
+#     "id": "9b706d01-7c43-4e2e-a158-372beccc3d22",
+#     "name": "Outdoor Explorers Club",
+#     "slug": "outdoor-explorers",
+#     "description": "Updated description with new hiking trail schedules.",
+#     "rules": "Be kind and respectful at all times.",
+#     "is_private": false
+#   }
+# }
+
+### Error Example: 403 Forbidden (Non-owner attempts update)
+# {
+#   "success": false,
+#   "error": {
+#     "code": "FORBIDDEN",
+#     "message": "Only the community owner can update settings"
+#   }
+# }
+
+###
+# @name JoinCommunity
+# Join a public community
+POST {{baseUrl}}/communities/{{communitySlug}}/join
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "community_id": "9b706d01-7c43-4e2e-a158-372beccc3d22",
+#     "user_id": "88888888-8888-8888-8888-888888888888",
+#     "role": "member",
+#     "joined_at": "2026-09-03T01:00:00.000Z"
+#   }
+# }
+
+### Error Example: 409 Conflict (Already a member)
+# {
+#   "success": false,
+#   "error": {
+#     "code": "CONFLICT",
+#     "message": "You are already a member of this community"
+#   }
+# }
+
+###
+# @name LeaveCommunity
+# Leave a community (Owner protected: cannot leave without transferring ownership)
+POST {{baseUrl}}/communities/{{communitySlug}}/leave
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "success": true
+#   }
+# }
+
+### Error Example: 400 Validation Error (Owner Protection Invariant)
+# {
+#   "success": false,
+#   "error": {
+#     "code": "VALIDATION_ERROR",
+#     "message": "Community owner cannot leave without transferring ownership first"
+#   }
+# }
+
+###
+# @name DeleteCommunity
+# Soft-delete community (Owner only)
+DELETE {{baseUrl}}/communities/{{communitySlug}}
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": {
+#     "success": true
+#   }
+# }
+
+###
+# @name ListCommunityMembers
+# List members with roles (Admin / Mod / Owner only)
+GET {{baseUrl}}/communities/{{communitySlug}}/members?page=1&limit=20&role=member
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": [
+#     {
+#       "userId": "5ee949e8-b14b-4a26-be3e-16a444b8599d",
+#       "role": "owner",
+#       "joinedAt": "2026-09-03T01:00:00.000Z",
+#       "appointedAt": null,
+#       "appointedBy": null,
+#       "user": {
+#         "id": "5ee949e8-b14b-4a26-be3e-16a444b8599d",
+#         "username": "johndoe",
+#         "name": "John Doe",
+#         "first_name": "John",
+#         "last_name": "Doe",
+#         "profile_picture_url": null
+#       }
+#     }
+#   ],
+#   "meta": {
+#     "page": 1,
+#     "limit": 20,
+#     "total": 1,
+#     "totalPages": 1
+#   }
+# }
+
+###
+# @name UpdateMemberRole
+# Promote or demote member (Owner only; cannot alter owner role)
+PATCH {{baseUrl}}/communities/{{communitySlug}}/members/88888888-8888-8888-8888-888888888888
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "role": "moderator"
+}
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": {
+#     "community_id": "9b706d01-7c43-4e2e-a158-372beccc3d22",
+#     "user_id": "88888888-8888-8888-8888-888888888888",
+#     "role": "moderator",
+#     "joined_at": "2026-09-03T01:00:00.000Z",
+#     "appointed_by": "5ee949e8-b14b-4a26-be3e-16a444b8599d",
+#     "appointed_at": "2026-09-03T02:00:00.000Z"
+#   }
+# }
+
+### Error Example: 400 Validation Error (Cannot alter owner role)
+# {
+#   "success": false,
+#   "error": {
+#     "code": "VALIDATION_ERROR",
+#     "message": "Cannot alter community owner role"
+#   }
+# }
+
+###
+# @name KickMember
+# Kick member from community (Admin / Mod / Owner; cannot target owner)
+DELETE {{baseUrl}}/communities/{{communitySlug}}/members/88888888-8888-8888-8888-888888888888/kick
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": {
+#     "success": true
+#   }
+# }
+
+### Error Example: 400 Validation Error (Owner Protection Invariant)
+# {
+#   "success": false,
+#   "error": {
+#     "code": "VALIDATION_ERROR",
+#     "message": "Community owner cannot be kicked from their own community"
+#   }
+# }

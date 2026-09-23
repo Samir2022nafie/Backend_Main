@@ -1,0 +1,166 @@
+### Variables
+@baseUrl = http://localhost:3000/api/v1
+@authToken = your_bearer_token_here
+@communitySlug = trail-explorers
+@eventId = e1e2e3e4-1111-2222-3333-444455556666
+@targetUserId = u1u2u3u4-1111-2222-3333-444455556666
+
+###
+# @name CreateEvent
+# Create event in community (Member+ creates proposed; Admin/Mod/Owner creates approved)
+POST {{baseUrl}}/communities/{{communitySlug}}/events
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Summit Ridge Sunrise Hike",
+  "description": "An early morning hike to catch the sunrise over the peak.",
+  "coverImageUrl": "https://example.com/photos/summit.jpg",
+  "startsAt": "2026-10-15T05:30:00.000Z",
+  "endsAt": "2026-10-15T11:00:00.000Z",
+  "visibility": "public",
+  "maxParticipants": 30
+}
+
+### Expected Response: 201 Created (Admin/Owner)
+# {
+#   "success": true,
+#   "data": {
+#     "id": "e1e2e3e4-1111-2222-3333-444455556666",
+#     "communityId": "c1c2c3c4-1111-2222-3333-444455556666",
+#     "title": "Summit Ridge Sunrise Hike",
+#     "description": "An early morning hike to catch the sunrise over the peak.",
+#     "coverImageUrl": "https://example.com/photos/summit.jpg",
+#     "startsAt": "2026-10-15T05:30:00.000Z",
+#     "endsAt": "2026-10-15T11:00:00.000Z",
+#     "visibility": "public",
+#     "approvalStatus": "approved",
+#     "isVerified": true,
+#     "maxParticipants": 30,
+#     "creator": {
+#       "id": "5ee949e8-b14b-4a26-be3e-16a444b8599d",
+#       "username": "johndoe",
+#       "name": "John Doe",
+#       "first_name": "John",
+#       "last_name": "Doe",
+#       "profile_picture_url": null
+#     },
+#     "participantsCount": 1,
+#     "isParticipant": true,
+#     "isSaved": false
+#   }
+# }
+
+###
+# @name ListCommunityEvents
+# List events in community (respects visibility, approval status, bans)
+GET {{baseUrl}}/communities/{{communitySlug}}/events?page=1&limit=20
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+###
+# @name GetSingleEvent
+# Get single event details with participants preview
+GET {{baseUrl}}/communities/{{communitySlug}}/events/{{eventId}}
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+###
+# @name UpdateEvent
+# Update event details (Author OR Admin/Mod/Owner; cannot change approval status via PATCH)
+PATCH {{baseUrl}}/communities/{{communitySlug}}/events/{{eventId}}
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Summit Ridge Sunrise Hike (Updated Meeting Point)",
+  "maxParticipants": 35
+}
+
+###
+# @name JoinEvent
+# Join an approved event
+POST {{baseUrl}}/communities/{{communitySlug}}/events/{{eventId}}/join
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "joined": true,
+#     "participantsCount": 2
+#   }
+# }
+
+###
+# @name LeaveEvent
+# Leave an event
+POST {{baseUrl}}/communities/{{communitySlug}}/events/{{eventId}}/leave
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+###
+# @name ApproveEvent
+# Approve a proposed event (Admin/Mod/Owner only)
+POST {{baseUrl}}/communities/{{communitySlug}}/events/{{eventId}}/approve
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "id": "e1e2e3e4-1111-2222-3333-444455556666",
+#     "approvalStatus": "approved",
+#     "isVerified": true
+#   }
+# }
+
+###
+# @name RejectEvent
+# Reject a proposed event (Admin/Mod/Owner only)
+POST {{baseUrl}}/communities/{{communitySlug}}/events/{{eventId}}/reject
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "Does not meet community safety guidelines."
+}
+
+###
+# @name BanUserFromEvent
+# Ban user from event and evict from attendee list (Admin/Mod/Owner only)
+POST {{baseUrl}}/communities/{{communitySlug}}/events/{{eventId}}/ban
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "userId": "{{targetUserId}}",
+  "reason": "Violated event conduct rules."
+}
+
+###
+# @name ToggleSaveEvent
+# Toggle bookmark on event
+POST {{baseUrl}}/communities/{{communitySlug}}/events/{{eventId}}/save
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+###
+# @name SoftDeleteEvent
+# Soft delete event (Author OR Admin/Mod/Owner via CASL)
+DELETE {{baseUrl}}/communities/{{communitySlug}}/events/{{eventId}}
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+###
+# @name ListPendingEvents
+# List proposed events awaiting review (Admin/Mod/Owner only)
+GET {{baseUrl}}/admin/communities/{{communitySlug}}/pending-events?page=1&limit=20
+Authorization: Bearer {{authToken}}
+Accept: application/json

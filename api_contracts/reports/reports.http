@@ -1,0 +1,114 @@
+### Variables
+@baseUrl = http://localhost:3000/api/v1
+@authToken = your_bearer_token_here
+@communitySlug = art-hub
+@reportId = r1r2r3r4-1111-2222-3333-444455556666
+@targetPostId = p1p2p3p4-1111-2222-3333-444455556666
+@targetUserId = u1u2u3u4-1111-2222-3333-444455556666
+
+###
+# @name CreateReport
+# Create a report with strictly ONE target entity
+POST {{baseUrl}}/reports
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "This post contains harmful and abusive language.",
+  "reportedPostId": "{{targetPostId}}"
+}
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "id": "r1r2r3r4-1111-2222-3333-444455556666",
+#     "reporterId": "5ee949e8-b14b-4a26-be3e-16a444b8599d",
+#     "reportedUserId": null,
+#     "reportedPostId": "p1p2p3p4-1111-2222-3333-444455556666",
+#     "reportedCommentId": null,
+#     "reportedEventId": null,
+#     "reportedHangoutId": null,
+#     "reason": "This post contains harmful and abusive language.",
+#     "status": "pending",
+#     "reviewedBy": null,
+#     "reviewedAt": null,
+#     "createdAt": "2026-10-15T12:00:00.000Z"
+#   }
+# }
+
+###
+# @name ListReports
+# List reports for communities managed by the authenticated moderator/owner
+GET {{baseUrl}}/reports?status=pending&page=1&limit=20
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+###
+# @name UpdateReportStatus
+# Update report status (reviewing, resolved, dismissed)
+PATCH {{baseUrl}}/reports/{{reportId}}
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "status": "reviewing"
+}
+
+###
+# @name TakeModerationAction
+# Execute a moderation action on a report (warn, suspend, ban, content_removed, etc.)
+POST {{baseUrl}}/reports/{{reportId}}/action
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "actionType": "content_removed",
+  "notes": "Removed content that violates community hate speech policy."
+}
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "moderationAction": {
+#       "id": "ma1ma2ma-1111-2222-3333-444455556666",
+#       "moderatorId": "5ee949e8-b14b-4a26-be3e-16a444b8599d",
+#       "targetUserId": "u1u2u3u4-1111-2222-3333-444455556666",
+#       "reportId": "r1r2r3r4-1111-2222-3333-444455556666",
+#       "actionType": "content_removed",
+#       "notes": "Removed content that violates community hate speech policy.",
+#       "createdAt": "2026-10-15T12:30:00.000Z"
+#     },
+#     "report": {
+#       "id": "r1r2r3r4-1111-2222-3333-444455556666",
+#       "status": "resolved",
+#       "reviewedBy": "5ee949e8-b14b-4a26-be3e-16a444b8599d",
+#       "reviewedAt": "2026-10-15T12:30:00.000Z"
+#     }
+#   }
+# }
+
+###
+# @name ListCommunityReports
+# List reports scoped to a specific community (Admin/Mod/Owner)
+GET {{baseUrl}}/communities/{{communitySlug}}/reports?page=1&limit=20
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+###
+# @name ListCommunityModerationActions
+# List moderation action history for a community (Admin/Mod/Owner)
+GET {{baseUrl}}/communities/{{communitySlug}}/moderation-actions?page=1&limit=20
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+###
+# @name ListCommunityBannedUsers
+# List all users banned from events and hangouts in the community
+GET {{baseUrl}}/admin/communities/{{communitySlug}}/banned-users
+Authorization: Bearer {{authToken}}
+Accept: application/json

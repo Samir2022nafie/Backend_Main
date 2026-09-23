@@ -1,0 +1,42 @@
+# Compiled output
+/dist
+/build
+
+# Dependencies
+/node_modules
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# IDE / Editor
+.vscode
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Coverage directory used by testing tools
+/coverage
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Docs and internal guidance
+docs/
+AGENTS.md
+READ_THIS_FOR MIGRATION.md

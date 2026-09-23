@@ -1,0 +1,70 @@
+### Variables
+@baseUrl = http://localhost:3000/api/v1
+@authToken = your_bearer_token_here
+@communitySlug = outdoor-explorers
+
+###
+# @name GetCommunityOverview
+# Get community admin overview (Admin, Moderator, or Owner of this community only)
+GET {{baseUrl}}/admin/communities/{{communitySlug}}
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": {
+#     "community": {
+#       "id": "9b706d01-7c43-4e2e-a158-372beccc3d22",
+#       "name": "Outdoor Explorers",
+#       "slug": "outdoor-explorers",
+#       "description": "A community for outdoor enthusiasts, hikers, and campers.",
+#       "rules": "1. Leave no trace.\n2. Respect fellow campers.",
+#       "creator_id": "5ee949e8-b14b-4a26-be3e-16a444b8599d",
+#       "location_id": null,
+#       "category_id": "1a55efee-d85e-4dab-b299-8984d9841ebf",
+#       "banner_url": null,
+#       "profile_picture_url": null,
+#       "is_private": false,
+#       "created_at": "2026-09-03T01:00:00.000Z",
+#       "updated_at": "2026-09-03T01:00:00.000Z",
+#       "deleted_at": null,
+#       "category": {
+#         "id": "1a55efee-d85e-4dab-b299-8984d9841ebf",
+#         "name": "outdoor_adventure"
+#       },
+#       "location": null
+#     },
+#     "myRole": "owner",
+#     "memberCount": 14
+#   }
+# }
+
+### Error Example: 403 Forbidden (Non-admin/mod/owner access)
+# {
+#   "success": false,
+#   "error": {
+#     "code": "FORBIDDEN",
+#     "message": "Only community administrators, moderators, and the owner can access this resource"
+#   }
+# }
+
+###
+# @name GetCommunityStats
+# Get aggregated metrics and analytics for community dashboard (Admin, Mod, Owner only)
+GET {{baseUrl}}/admin/communities/{{communitySlug}}/stats
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": {
+#     "totalMembers": 14,
+#     "totalPosts": 0,
+#     "totalEvents": 0,
+#     "pendingReports": 0,
+#     "pendingEvents": 0,
+#     "newMembersThisWeek": 14
+#   }
+# }

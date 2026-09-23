@@ -1,0 +1,244 @@
+### Variables
+@baseUrl = http://localhost:3000/api/v1
+@authToken = your_bearer_token_here
+@communitySlug = outdoor-explorers
+@postId = b1c2d3e4-1111-2222-3333-444455556666
+
+###
+# @name CreatePost
+# Create a new post in a community (Member+ only)
+POST {{baseUrl}}/communities/{{communitySlug}}/posts
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Exploring the Northern Ridge",
+  "content": "Had an incredible trek this morning. The weather was crisp and the trail was clear.",
+  "mediaUrl": "https://example.com/photos/northern-ridge.jpg",
+  "tags": ["hiking", "trail", "adventure"]
+}
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "id": "b1c2d3e4-1111-2222-3333-444455556666",
+#     "communityId": "9b706d01-7c43-4e2e-a158-372beccc3d22",
+#     "title": "Exploring the Northern Ridge",
+#     "content": "Had an incredible trek this morning. The weather was crisp and the trail was clear.",
+#     "mediaUrl": "https://example.com/photos/northern-ridge.jpg",
+#     "createdAt": "2026-09-03T05:00:00.000Z",
+#     "updatedAt": "2026-09-03T05:00:00.000Z",
+#     "author": {
+#       "id": "5ee949e8-b14b-4a26-be3e-16a444b8599d",
+#       "username": "johndoe",
+#       "name": "John Doe",
+#       "first_name": "John",
+#       "last_name": "Doe",
+#       "profile_picture_url": null
+#     },
+#     "tags": ["hiking", "trail", "adventure"],
+#     "reactionCount": 0,
+#     "hasReacted": false,
+#     "hasSaved": false,
+#     "commentCount": 0
+#   }
+# }
+
+### Error Example: 403 Forbidden (Non-member tries to create post)
+# {
+#   "success": false,
+#   "error": {
+#     "code": "FORBIDDEN",
+#     "message": "Only community members can create posts"
+#   }
+# }
+
+### Error Example: 400 Validation Error (No title, content, or mediaUrl)
+# {
+#   "success": false,
+#   "error": {
+#     "code": "VALIDATION_ERROR",
+#     "message": "Validation failed",
+#     "details": [
+#       {
+#         "path": ["content"],
+#         "message": "At least one of title, content, or mediaUrl is required"
+#       }
+#     ]
+#   }
+# }
+
+###
+# @name ListCommunityPosts
+# List posts in community (Public or Member; respects block filtering)
+GET {{baseUrl}}/communities/{{communitySlug}}/posts?page=1&limit=20&sort=created_at&order=desc
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": [
+#     {
+#       "id": "b1c2d3e4-1111-2222-3333-444455556666",
+#       "communityId": "9b706d01-7c43-4e2e-a158-372beccc3d22",
+#       "title": "Exploring the Northern Ridge",
+#       "content": "Had an incredible trek this morning...",
+#       "mediaUrl": "https://example.com/photos/northern-ridge.jpg",
+#       "createdAt": "2026-09-03T05:00:00.000Z",
+#       "updatedAt": "2026-09-03T05:00:00.000Z",
+#       "author": {
+#         "id": "5ee949e8-b14b-4a26-be3e-16a444b8599d",
+#         "username": "johndoe",
+#         "name": "John Doe",
+#         "first_name": "John",
+#         "last_name": "Doe",
+#         "profile_picture_url": null
+#       },
+#       "tags": ["hiking", "trail", "adventure"],
+#       "reactionCount": 4,
+#       "hasReacted": true,
+#       "hasSaved": false,
+#       "commentCount": 3
+#     }
+#   ],
+#   "meta": {
+#     "page": 1,
+#     "limit": 20,
+#     "total": 1,
+#     "totalPages": 1
+#   }
+# }
+
+###
+# @name GetSinglePost
+# Get single post by ID (Includes author, community, tags, counts, first 10 comments)
+GET {{baseUrl}}/posts/{{postId}}
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": {
+#     "id": "b1c2d3e4-1111-2222-3333-444455556666",
+#     "community": {
+#       "id": "9b706d01-7c43-4e2e-a158-372beccc3d22",
+#       "name": "Outdoor Explorers",
+#       "slug": "outdoor-explorers"
+#     },
+#     "title": "Exploring the Northern Ridge",
+#     "content": "Had an incredible trek this morning...",
+#     "mediaUrl": "https://example.com/photos/northern-ridge.jpg",
+#     "createdAt": "2026-09-03T05:00:00.000Z",
+#     "updatedAt": "2026-09-03T05:00:00.000Z",
+#     "author": {
+#       "id": "5ee949e8-b14b-4a26-be3e-16a444b8599d",
+#       "username": "johndoe",
+#       "name": "John Doe",
+#       "first_name": "John",
+#       "last_name": "Doe",
+#       "profile_picture_url": null
+#     },
+#     "tags": ["hiking", "trail", "adventure"],
+#     "reactionCount": 4,
+#     "hasReacted": true,
+#     "hasSaved": false,
+#     "commentCount": 3,
+#     "comments": []
+#   }
+# }
+
+###
+# @name UpdatePost
+# Update post (Author only)
+PATCH {{baseUrl}}/posts/{{postId}}
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Exploring the Northern Ridge (Updated with Map)",
+  "content": "Updated notes with detailed parking and water point instructions.",
+  "tags": ["hiking", "trail", "maps"]
+}
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": {
+#     "id": "b1c2d3e4-1111-2222-3333-444455556666",
+#     "communityId": "9b706d01-7c43-4e2e-a158-372beccc3d22",
+#     "title": "Exploring the Northern Ridge (Updated with Map)",
+#     "content": "Updated notes with detailed parking and water point instructions.",
+#     "mediaUrl": "https://example.com/photos/northern-ridge.jpg",
+#     "createdAt": "2026-09-03T05:00:00.000Z",
+#     "updatedAt": "2026-09-03T05:10:00.000Z",
+#     "author": {
+#       "id": "5ee949e8-b14b-4a26-be3e-16a444b8599d",
+#       "username": "johndoe",
+#       "name": "John Doe",
+#       "first_name": "John",
+#       "last_name": "Doe",
+#       "profile_picture_url": null
+#     },
+#     "tags": ["hiking", "trail", "maps"]
+#   }
+# }
+
+### Error Example: 403 Forbidden (Non-author attempts update)
+# {
+#   "success": false,
+#   "error": {
+#     "code": "FORBIDDEN",
+#     "message": "Only the author can update this post"
+#   }
+# }
+
+###
+# @name ToggleReaction
+# Toggle reaction (like) on a post
+POST {{baseUrl}}/posts/{{postId}}/react
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "reacted": true,
+#     "reactionCount": 5
+#   }
+# }
+
+###
+# @name ToggleSave
+# Toggle save (bookmark) on a post
+POST {{baseUrl}}/posts/{{postId}}/save
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 201 Created
+# {
+#   "success": true,
+#   "data": {
+#     "saved": true
+#   }
+# }
+
+###
+# @name DeletePost
+# Soft delete post (Author OR Admin/Mod/Owner of community)
+DELETE {{baseUrl}}/posts/{{postId}}
+Authorization: Bearer {{authToken}}
+Accept: application/json
+
+### Expected Response: 200 OK
+# {
+#   "success": true,
+#   "data": {
+#     "success": true
+#   }
+# }
