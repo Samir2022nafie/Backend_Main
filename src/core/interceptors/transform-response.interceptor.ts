@@ -18,8 +18,8 @@ export class TransformResponseInterceptor<T>
   ): Observable<ApiSuccessResponse<T>> {
     return next.handle().pipe(
       map((result) => {
-        // If already formatted, return as-is
-        if (result && typeof result === 'object' && 'success' in result) {
+        // If already formatted with both 'success' and 'data', return as-is
+        if (result && typeof result === 'object' && 'success' in result && 'data' in result) {
           return result;
         }
 

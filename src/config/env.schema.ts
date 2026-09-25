@@ -5,7 +5,7 @@ export const envSchema = z.object({
   ENVIRONMENT: z.string().optional().default('dev'),
   PORT: z.coerce.number().default(3000),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
-  ENCRYPTION_SECRET: z.string().optional().default('hobbyhub-default-secret-dev'),
+  ENCRYPTION_SECRET: z.string().optional().default('nexus-default-secret-dev'),
   NEXT_PUBLIC_API_URL: z.string().optional().default('http://localhost:3000'),
   BOT_WEBHOOK_SECRET: z.string().optional(),
 });

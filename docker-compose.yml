@@ -32,7 +32,7 @@ services:
       NODE_ENV: production
       PORT: 3000
       DATABASE_URL: postgresql://hobbyhub_user:hobbyhub_secure_password@postgres:5432/hobbyhub_db?schema=public
-      JWT_SECRET: production_jwt_secret_token_1234567890_abcdef
+      BETTER_AUTH_SECRET: production_better_auth_secret_token_1234567890_abcdef
       STORAGE_PUBLIC_URL: https://storage.hobbyhub.local
       ENVIRONMENT: production
     ports:

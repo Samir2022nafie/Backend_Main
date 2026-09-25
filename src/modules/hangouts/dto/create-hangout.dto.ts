@@ -26,6 +26,8 @@ export const createHangoutSchema = z
     maxParticipants: z.coerce.number().int().min(1, 'maxParticipants must be at least 1').optional(),
     communityId: uuidSchema.optional(),
     locationId: uuidSchema.optional(),
+    location: z.string().trim().max(255).optional().nullable(),
+    locationName: z.string().trim().max(255).optional().nullable(),
     subcommunityId: uuidSchema.optional(),
   })
   .refine(

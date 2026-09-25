@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CurrentUser } from '@/core/decorators/current-user.decorator';
@@ -37,14 +38,35 @@ export class UsersController {
   }
 
   @Delete('me')
-  async softDelete(@CurrentUser() user: any) {
-    return this.usersService.softDelete(user.id);
+  async softDelete(
+    @CurrentUser() user: any,
+    @Query('ticket') queryTicket?: string,
+    @Body('ticket') bodyTicket?: string,
+  ) {
+    const ticket = queryTicket || bodyTicket;
+    return this.usersService.softDelete(user.id, ticket);
+  }
+
+  @Get('me/followers')
+  async getMyFollowers(
+    @CurrentUser() user: any,
+    @Query('q') query?: string,
+  ) {
+    return this.usersService.getMyFollowers(user.id, query);
+  }
+
+  @Delete('me/followers/:followerId')
+  async removeFollower(
+    @Param('followerId', new ZodValidationPipe(uuidSchema)) followerId: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.usersService.removeFollower(followerId, user.id);
   }
 
   @Public()
   @Get(':id')
   async getPublicProfile(
-    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @Param('id') id: string,
     @CurrentUser() user?: any,
   ) {
     return this.usersService.getPublicProfile(id, user?.id);
@@ -53,10 +75,19 @@ export class UsersController {
   @Public()
   @Get(':id/posts')
   async getUserPosts(
-    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @Param('id') id: string,
     @CurrentUser() user?: any,
   ) {
     return this.usersService.getUserPosts(id, user?.id);
+  }
+
+  @Public()
+  @Get(':id/communities')
+  async getUserCommunities(
+    @Param('id') id: string,
+    @CurrentUser() user?: any,
+  ) {
+    return this.usersService.getUserCommunities(id, user?.id);
   }
 
   @Post(':id/follow')

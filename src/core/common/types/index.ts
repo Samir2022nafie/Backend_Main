@@ -38,7 +38,7 @@ export interface RequestUser {
   email: string | null;
   phoneNumber: string | null;
   firstName: string;
-  lastName: string;
+  lastName?: string | null;
   trustScore: number;
   [key: string]: any;
 }

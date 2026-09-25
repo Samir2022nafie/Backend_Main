@@ -138,9 +138,10 @@ model users {
   email_verified         Boolean   @default(false)
   phone_number           String?   @unique @db.VarChar(20)
   phone_verified_at      DateTime? @db.Timestamptz(6) // gates phone login — see AUTH_SPECIFICATION.md §3
+  phone_number_verified  Boolean   @default(false)     // Better Auth phone plugin flag — synced with phone_verified_at
   password_hash          String?   @db.Text // legacy column — UNUSED, see AUTH_SPECIFICATION.md §8
   first_name             String    @db.VarChar(50)
-  last_name              String    @db.VarChar(50)
+  last_name              String?   @db.VarChar(50)
   name                   String?   @db.VarChar(100) // Better-Auth generic display-name field
   birth_date             DateTime  @db.Date
   bio                    String?   @db.VarChar(500)

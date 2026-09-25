@@ -7,7 +7,7 @@ export default () => ({
     url: process.env.DATABASE_URL,
   },
   encryption: {
-    secret: process.env.ENCRYPTION_SECRET || 'hobbyhub-default-secret-dev',
+    secret: process.env.ENCRYPTION_SECRET || 'nexus-default-secret-dev',
   },
   bot: {
     webhookSecret: process.env.BOT_WEBHOOK_SECRET,

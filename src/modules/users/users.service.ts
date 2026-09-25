@@ -87,8 +87,8 @@ export class UsersService {
     }
 
     const firstName = dto.firstName ?? existing.first_name;
-    const lastName = dto.lastName ?? existing.last_name;
-    const fullName = `${firstName} ${lastName}`.trim();
+    const lastName = dto.lastName !== undefined ? dto.lastName : existing.last_name;
+    const fullName = `${firstName} ${lastName || ''}`.trim();
 
     const resolvedPic = dto.profilePictureUrl !== undefined
       ? (dto.profilePictureUrl && dto.profilePictureUrl.trim() ? await resolveDirectImageUrl(dto.profilePictureUrl.trim()) : null)
@@ -98,7 +98,7 @@ export class UsersService {
       where: { id: userId },
       data: {
         first_name: dto.firstName,
-        last_name: dto.lastName,
+        last_name: dto.lastName !== undefined ? (dto.lastName || null) : undefined,
         name: fullName,
         bio: dto.bio,
         profile_picture_url: resolvedPic,
@@ -109,25 +109,69 @@ export class UsersService {
   }
 
   /**
-   * Soft-delete user account and invalidate all active sessions
+   * Soft-delete user account:
+   * - Scramble username so the original can be reused
+   * - Null out email & phone so they can be re-registered
+   * - Delete external account links
+   * - Invalidate all active sessions
    */
-  async softDelete(userId: string): Promise<{ success: true }> {
+  async softDelete(userId: string, ticket?: string): Promise<{ success: true }> {
+    if (ticket) {
+      const record = await this.prisma.verification.findFirst({
+        where: {
+          identifier: `security-ticket:delete-account:${userId}`,
+          value: ticket,
+          expires_at: { gt: new Date() },
+        },
+      });
+
+      if (!record) {
+        throw new BadRequestException({
+          code: ErrorCode.VALIDATION_ERROR,
+          message: 'Security verification session expired or invalid. Please verify again.',
+        });
+      }
+
+      await this.prisma.verification.delete({ where: { id: record.id } });
+    }
+
+    const shortId = userId.slice(0, 8);
+    const timestamp = Date.now();
+
     await this.prisma.users.update({
       where: { id: userId },
-      data: { deleted_at: new Date() },
+      data: {
+        deleted_at: new Date(),
+        username: `deleted_${shortId}_${timestamp}`,
+        email: null,
+        phone_number: null,
+        phone_verified_at: null,
+        phone_number_verified: false,
+      },
     });
 
+    // Remove all external account links (credential, oauth, etc.)
+    await this.prisma.user_external_accounts.deleteMany({
+      where: { user_id: userId },
+    });
+
+    // Invalidate all sessions
     await this.sessionService.revokeAllUserSessions(userId);
 
     return { success: true };
   }
 
   /**
-   * Get public profile with block hiding and follow status
+   * Get public profile with block hiding and follow status (supports UUID or username)
    */
   async getPublicProfile(targetUserId: string, currentUserId?: string) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(targetUserId);
+    const userWhere: any = isUuid
+      ? { id: targetUserId, deleted_at: null }
+      : { username: targetUserId, deleted_at: null };
+
     const user = await this.prisma.users.findFirst({
-      where: { id: targetUserId, deleted_at: null },
+      where: userWhere,
       include: {
         _count: {
           select: {
@@ -146,12 +190,14 @@ export class UsersService {
       });
     }
 
+    const resolvedUserId = user.id;
+
     if (currentUserId) {
       const block = await this.prisma.user_blocks.findFirst({
         where: {
           OR: [
-            { blocker_id: currentUserId, blocked_id: targetUserId },
-            { blocker_id: targetUserId, blocked_id: currentUserId },
+            { blocker_id: currentUserId, blocked_id: resolvedUserId },
+            { blocker_id: resolvedUserId, blocked_id: currentUserId },
           ],
         },
       });
@@ -165,12 +211,12 @@ export class UsersService {
     }
 
     let isFollowing = false;
-    if (currentUserId && currentUserId !== targetUserId) {
+    if (currentUserId && currentUserId !== resolvedUserId) {
       const follow = await this.prisma.user_follows.findUnique({
         where: {
           follower_id_following_id: {
             follower_id: currentUserId,
-            following_id: targetUserId,
+            following_id: resolvedUserId,
           },
         },
       });
@@ -192,7 +238,86 @@ export class UsersService {
         communitiesCount: user._count.community_memberships,
       },
       isFollowing,
+      trust_score: user.trust_score ?? 50,
+      trustScore: user.trust_score ?? 50,
     };
+  }
+
+  /**
+   * Get followers of current user with follow-back status and optional search
+   */
+  async getMyFollowers(currentUserId: string, search?: string) {
+    const where: any = {
+      following_id: currentUserId,
+      follower: {
+        deleted_at: null,
+      },
+    };
+
+    if (search && search.trim()) {
+      const q = search.trim();
+      where.follower.OR = [
+        { username: { contains: q, mode: 'insensitive' } },
+        { name: { contains: q, mode: 'insensitive' } },
+        { first_name: { contains: q, mode: 'insensitive' } },
+        { last_name: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+
+    const followers = await this.prisma.user_follows.findMany({
+      where,
+      include: {
+        follower: {
+          select: {
+            id: true,
+            username: true,
+            name: true,
+            first_name: true,
+            last_name: true,
+            bio: true,
+            profile_picture_url: true,
+            trust_score: true,
+          },
+        },
+      },
+      orderBy: { followed_at: 'desc' },
+    });
+
+    const followerList = followers as any[];
+    const followerIds = followerList.map((f) => f.follower_id);
+    const followingBack = await this.prisma.user_follows.findMany({
+      where: {
+        follower_id: currentUserId,
+        following_id: { in: followerIds },
+      },
+      select: { following_id: true },
+    });
+    const followingBackSet = new Set(followingBack.map((f) => f.following_id));
+
+    return followerList.map((f) => ({
+      id: f.follower?.id || f.follower_id,
+      username: f.follower?.username || '',
+      name: f.follower?.name || '',
+      firstName: f.follower?.first_name || '',
+      lastName: f.follower?.last_name || '',
+      bio: f.follower?.bio || null,
+      profilePictureUrl: f.follower?.profile_picture_url || null,
+      trustScore: f.follower?.trust_score ?? 50,
+      isFollowing: followingBackSet.has(f.follower_id),
+    }));
+  }
+
+  /**
+   * Remove a follower from current user's followers
+   */
+  async removeFollower(followerUserId: string, currentUserId: string) {
+    await this.prisma.user_follows.deleteMany({
+      where: {
+        follower_id: followerUserId,
+        following_id: currentUserId,
+      },
+    });
+    return { success: true, removed: true };
   }
 
   /**
@@ -284,15 +409,26 @@ export class UsersService {
   }
 
   /**
-   * Get public posts authored by a user
+   * Get public posts authored by a user (supports UUID or username)
    */
   async getUserPosts(targetUserId: string, currentUserId?: string) {
+    let resolvedUserId = targetUserId;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(targetUserId);
+    if (!isUuid) {
+      const u = await this.prisma.users.findFirst({
+        where: { username: targetUserId, deleted_at: null },
+        select: { id: true },
+      });
+      if (!u) return [];
+      resolvedUserId = u.id;
+    }
+
     if (currentUserId) {
       const block = await this.prisma.user_blocks.findFirst({
         where: {
           OR: [
-            { blocker_id: currentUserId, blocked_id: targetUserId },
-            { blocker_id: targetUserId, blocked_id: currentUserId },
+            { blocker_id: currentUserId, blocked_id: resolvedUserId },
+            { blocker_id: resolvedUserId, blocked_id: currentUserId },
           ],
         },
       });
@@ -301,7 +437,7 @@ export class UsersService {
 
     const posts = await this.prisma.posts.findMany({
       where: {
-        author_id: targetUserId,
+        author_id: resolvedUserId,
         deleted_at: null,
       },
       include: {
@@ -315,12 +451,19 @@ export class UsersService {
             profile_picture_url: true,
           },
         },
+        tags: {
+          include: {
+            tag: true,
+          },
+        },
         community: {
           select: {
             id: true,
             name: true,
             slug: true,
             category: true,
+            profile_picture_url: true,
+            banner_url: true,
           },
         },
         _count: {
@@ -332,7 +475,7 @@ export class UsersService {
         ...(currentUserId
           ? {
               reactions: { where: { user_id: currentUserId } },
-              bookmarks: { where: { user_id: currentUserId } },
+              saved_by: { where: { user_id: currentUserId } },
             }
           : {}),
       },
@@ -347,10 +490,25 @@ export class UsersService {
       media_url: p.media_url,
       communityId: p.community_id,
       community_id: p.community_id,
-      community: p.community,
+      community: p.community
+        ? {
+            id: p.community.id,
+            name: p.community.name,
+            slug: p.community.slug,
+            category: p.community.category,
+            profile_picture_url: p.community.profile_picture_url,
+            profilePictureUrl: p.community.profile_picture_url,
+            banner_url: p.community.banner_url,
+            bannerUrl: p.community.banner_url,
+          }
+        : null,
       communityName: p.community?.name,
       communitySlug: p.community?.slug,
       communityCategory: p.community?.category,
+      communityAvatar: p.community?.profile_picture_url,
+      communityProfilePictureUrl: p.community?.profile_picture_url,
+      communityBanner: p.community?.banner_url,
+      communityBannerUrl: p.community?.banner_url,
       author: p.author,
       authorId: p.author_id,
       author_id: p.author_id,
@@ -358,17 +516,113 @@ export class UsersService {
         ? `${p.author.first_name || ''} ${p.author.last_name || ''}`.trim() || p.author.name || p.author.username
         : 'Unknown',
       authorAvatar: p.author?.profile_picture_url,
+      tags: p.tags ? p.tags.map((t: any) => t.tag?.name || t.name || t) : [],
       likesCount: p._count.reactions,
       reactionCount: p._count.reactions,
       commentsCount: p._count.comments,
       commentCount: p._count.comments,
       hasReacted: currentUserId && Array.isArray(p.reactions) ? p.reactions.length > 0 : false,
       isLiked: currentUserId && Array.isArray(p.reactions) ? p.reactions.length > 0 : false,
-      hasSaved: currentUserId && Array.isArray(p.bookmarks) ? p.bookmarks.length > 0 : false,
-      isSaved: currentUserId && Array.isArray(p.bookmarks) ? p.bookmarks.length > 0 : false,
+      hasSaved: currentUserId && Array.isArray(p.saved_by) ? p.saved_by.length > 0 : false,
+      isSaved: currentUserId && Array.isArray(p.saved_by) ? p.saved_by.length > 0 : false,
       createdAt: p.created_at,
       created_at: p.created_at,
+      updatedAt: p.updated_at,
+      updated_at: p.updated_at,
+      isEdited: Boolean(p.updated_at && p.created_at && (new Date(p.updated_at).getTime() - new Date(p.created_at).getTime() > 2000)),
+      is_edited: Boolean(p.updated_at && p.created_at && (new Date(p.updated_at).getTime() - new Date(p.created_at).getTime() > 2000)),
     }));
+  }
+
+  /**
+   * Get public communities a user is a member of (supports UUID or username)
+   */
+  async getUserCommunities(targetUserId: string, currentUserId?: string) {
+    let resolvedUserId = targetUserId;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(targetUserId);
+    if (!isUuid) {
+      const u = await this.prisma.users.findFirst({
+        where: { username: targetUserId, deleted_at: null },
+        select: { id: true },
+      });
+      if (!u) {
+        throw new NotFoundException({
+          code: ErrorCode.NOT_FOUND,
+          message: 'User not found',
+        });
+      }
+      resolvedUserId = u.id;
+    }
+
+    if (currentUserId) {
+      const block = await this.prisma.user_blocks.findFirst({
+        where: {
+          OR: [
+            { blocker_id: currentUserId, blocked_id: resolvedUserId },
+            { blocker_id: resolvedUserId, blocked_id: currentUserId },
+          ],
+        },
+      });
+      if (block) return [];
+    }
+
+    const memberships = await this.prisma.community_members.findMany({
+      where: {
+        user_id: resolvedUserId,
+        community: {
+          deleted_at: null,
+        },
+      },
+      include: {
+        community: {
+          include: {
+            category: true,
+            _count: {
+              select: {
+                members: true,
+                events: { where: { deleted_at: null } },
+                posts: { where: { deleted_at: null } },
+              },
+            },
+            ...(currentUserId
+              ? {
+                  members: {
+                    where: { user_id: currentUserId },
+                  },
+                }
+              : {}),
+          },
+        },
+      },
+      orderBy: { joined_at: 'desc' },
+    });
+
+    return memberships.map((m: any) => {
+      const c = m.community;
+      const isViewerMember = currentUserId && Array.isArray(c.members) ? c.members.length > 0 : false;
+      const viewerRole = isViewerMember ? c.members[0].role : null;
+
+      return {
+        id: c.id,
+        name: c.name,
+        slug: c.slug,
+        description: c.description,
+        bannerUrl: c.banner_url,
+        banner_url: c.banner_url,
+        profilePictureUrl: c.profile_picture_url,
+        profile_picture_url: c.profile_picture_url,
+        isPrivate: c.is_private,
+        is_private: c.is_private,
+        category: c.category?.name || 'General',
+        memberCount: c._count.members,
+        postCount: c._count.posts,
+        eventCount: c._count.events,
+        userRole: m.role,
+        joinedAt: m.joined_at,
+        isMember: isViewerMember,
+        viewerRole,
+      };
+    });
   }
 
   /**

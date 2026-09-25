@@ -5,7 +5,6 @@ import {
   Req,
   Param,
   Headers,
-  UsePipes,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService, AuthResponse } from './auth.service';
@@ -21,6 +20,16 @@ import {
   VerifyPhoneDto,
   confirmPhoneSchema,
   ConfirmPhoneDto,
+  forgotPasswordSchema,
+  ForgotPasswordDto,
+  resetPasswordSchema,
+  ResetPasswordDto,
+  changePasswordSchema,
+  ChangePasswordDto,
+  securityCodeRequestSchema,
+  SecurityCodeRequestDto,
+  securityCodeVerifySchema,
+  SecurityCodeVerifyDto,
   oauthLoginSchema,
   OAuthLoginDto,
   linkExternalSchema,
@@ -59,11 +68,13 @@ export class AuthController {
     return this.authService.logout(token);
   }
 
+  @Public()
   @Post('verify-phone')
   async verifyPhone(
     @Body(new ZodValidationPipe(verifyPhoneSchema)) dto: VerifyPhoneDto,
+    @CurrentUser() user?: any,
   ): Promise<{ success: true; message: string }> {
-    return this.authService.verifyPhone(dto);
+    return this.authService.verifyPhone(dto, user?.id);
   }
 
   @Post('verify-phone/confirm')
@@ -72,6 +83,63 @@ export class AuthController {
     @Body(new ZodValidationPipe(confirmPhoneSchema)) dto: ConfirmPhoneDto,
   ): Promise<{ success: true }> {
     return this.authService.confirmPhone(user.id, dto);
+  }
+
+  /**
+   * Resend OTP — alias for verify-phone (re-triggers OTP generation and SMS delivery)
+   */
+  @Public()
+  @Post('resend-otp')
+  async resendOtp(
+    @Body(new ZodValidationPipe(verifyPhoneSchema)) dto: VerifyPhoneDto,
+  ): Promise<{ success: true; message: string }> {
+    return this.authService.verifyPhone(dto);
+  }
+
+  /**
+   * Forgot Password — initiates password reset flow via email or SMS.
+   */
+  @Public()
+  @Post('forgot-password')
+  async forgotPassword(
+    @Body(new ZodValidationPipe(forgotPasswordSchema)) dto: ForgotPasswordDto,
+  ): Promise<{ success: true; message: string }> {
+    return this.authService.forgotPassword(dto);
+  }
+
+  /**
+   * Reset Password — validates reset token and sets new password.
+   */
+  @Public()
+  @Post('reset-password')
+  async resetPassword(
+    @Body(new ZodValidationPipe(resetPasswordSchema)) dto: ResetPasswordDto,
+  ): Promise<{ success: true }> {
+    return this.authService.resetPassword(dto);
+  }
+
+  @Post('change-password')
+  async changePassword(
+    @CurrentUser() user: any,
+    @Body(new ZodValidationPipe(changePasswordSchema)) dto: ChangePasswordDto,
+  ): Promise<{ success: true; message: string }> {
+    return this.authService.changePassword(user.id, dto);
+  }
+
+  @Post('security/send-code')
+  async requestSecurityCode(
+    @CurrentUser() user: any,
+    @Body(new ZodValidationPipe(securityCodeRequestSchema)) dto: SecurityCodeRequestDto,
+  ): Promise<{ success: true; message: string }> {
+    return this.authService.requestSecurityCode(user.id, dto);
+  }
+
+  @Post('security/verify-code')
+  async verifySecurityCode(
+    @CurrentUser() user: any,
+    @Body(new ZodValidationPipe(securityCodeVerifySchema)) dto: SecurityCodeVerifyDto,
+  ): Promise<{ success: true; ticket: string }> {
+    return this.authService.verifySecurityCode(user.id, dto);
   }
 
   @Public()

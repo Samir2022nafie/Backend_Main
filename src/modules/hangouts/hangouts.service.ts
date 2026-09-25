@@ -61,6 +61,33 @@ export class HangoutsService {
   }
 
   /**
+   * Helper to resolve or create a location from locationId or locationName string
+   */
+  private async resolveLocationId(locationId?: string | null, locationName?: string | null): Promise<string | null> {
+    if (locationId) return locationId;
+    if (!locationName || !locationName.trim()) return null;
+
+    const trimmed = locationName.trim();
+    const existing = await this.prisma.locations.findFirst({
+      where: { place_name: { equals: trimmed, mode: 'insensitive' } },
+    });
+    if (existing) return existing.id;
+
+    const count = await this.prisma.locations.count();
+    const lat = 9.010793 + (count * 0.001);
+    const lng = 38.761252 + (count * 0.001);
+
+    const created = await this.prisma.locations.create({
+      data: {
+        place_name: trimmed,
+        latitude: lat,
+        longitude: lng,
+      },
+    });
+    return created.id;
+  }
+
+  /**
    * Create hangout (standalone or community-tied; immediately live)
    */
   async create(userId: string, dto: CreateHangoutDto) {
@@ -87,12 +114,17 @@ export class HangoutsService {
       }
     }
 
+    const resolvedLocationId = await this.resolveLocationId(
+      dto.locationId,
+      dto.location || dto.locationName
+    );
+
     const hangout = await this.prisma.hangouts.create({
       data: {
         creator_id: userId,
         community_id: dto.communityId ?? null,
         subcommunity_id: dto.subcommunityId ?? null,
-        location_id: dto.locationId ?? null,
+        location_id: resolvedLocationId,
         title: dto.title,
         description: dto.description ?? null,
         cover_image_url: dto.coverImageUrl && dto.coverImageUrl.trim() ? await resolveDirectImageUrl(dto.coverImageUrl.trim()) : null,
@@ -475,9 +507,13 @@ export class HangoutsService {
     if (dto.endsAt !== undefined) updateData.ends_at = dto.endsAt ? new Date(dto.endsAt) : null;
     if (dto.visibility !== undefined) updateData.visibility = dto.visibility;
     if (dto.joinType !== undefined) updateData.join_type = dto.joinType;
-    if (dto.maxParticipants !== undefined) updateData.max_participants = dto.maxParticipants;
-    if (dto.locationId !== undefined) updateData.location_id = dto.locationId;
+    if (dto.location !== undefined || dto.locationName !== undefined || dto.locationId !== undefined) {
+      updateData.location_id = await this.resolveLocationId(dto.locationId, dto.location || dto.locationName);
+    }
     if (dto.subcommunityId !== undefined) updateData.subcommunity_id = dto.subcommunityId;
+    if (dto.maxParticipants !== undefined) {
+      updateData.max_participants = dto.maxParticipants ? Number(dto.maxParticipants) : null;
+    }
 
     const updated = await this.prisma.hangouts.update({
       where: { id },
@@ -503,6 +539,34 @@ export class HangoutsService {
         location: true,
       },
     });
+
+    // Notify participants and creator about modifications
+    try {
+      const participants = await this.prisma.hangout_participants.findMany({
+        where: { hangout_id: id },
+        select: { user_id: true },
+      });
+      const recipientIds = new Set<string>(participants.map((p) => p.user_id));
+      if (hangout.creator_id !== userId) {
+        recipientIds.add(hangout.creator_id);
+      }
+      recipientIds.delete(userId);
+
+      for (const targetUserId of recipientIds) {
+        await this.prisma.notifications.create({
+          data: {
+            user_id: targetUserId,
+            type: 'event_reminder',
+            title: 'Hangout Updated',
+            message: `Details about "${updated.title}" have been modified.`,
+            related_entity_type: 'hangout',
+            related_entity_id: updated.id,
+          },
+        }).catch(() => null);
+      }
+    } catch {
+      // Non-blocking notification
+    }
 
     return {
       id: updated.id,

@@ -10,7 +10,7 @@ export class EncryptionService {
   constructor(private readonly configService: ConfigService) {
     const secret =
       this.configService.get<string>('encryption.secret') ||
-      'hobbyhub-default-secret-dev';
+      'nexus-default-secret-dev';
     // Derive 32 bytes key using sha256
     this.key = crypto.createHash('sha256').update(secret).digest();
   }

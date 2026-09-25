@@ -24,6 +24,8 @@ export const createEventSchema = z
     visibility: z.enum(['public', 'community', 'subcommunity']).default('public').optional(),
     maxParticipants: z.coerce.number().int().min(1, 'maxParticipants must be at least 1').optional(),
     locationId: uuidSchema.optional(),
+    location: z.string().trim().max(255).optional().nullable(),
+    locationName: z.string().trim().max(255).optional().nullable(),
     subcommunityId: uuidSchema.optional(),
   })
   .refine(

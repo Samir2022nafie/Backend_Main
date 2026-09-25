@@ -32,7 +32,7 @@ cp .env.example .env
 
 Required environment variables:
 - `DATABASE_URL`: PostgreSQL connection string (supports Neon Serverless pool URLs).
-- `JWT_SECRET`: Secret key for JWT session verification.
+- `BETTER_AUTH_SECRET`: Secret key for Better Auth session signing & cryptographic verification.
 - `PORT`: Application port (default: `3000`).
 - `ENVIRONMENT`: Runtime mode (`dev` for detailed verbose HTTP logs, `production` for standard logging).
 

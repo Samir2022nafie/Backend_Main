@@ -12,6 +12,8 @@ export const updateHangoutSchema = z
     joinType: z.enum(['open', 'request_based']).optional(),
     maxParticipants: z.coerce.number().int().min(1).optional().nullable(),
     locationId: uuidSchema.optional().nullable(),
+    location: z.string().trim().max(255).optional().nullable(),
+    locationName: z.string().trim().max(255).optional().nullable(),
     subcommunityId: uuidSchema.optional().nullable(),
   })
   .refine((data) => Object.keys(data).length > 0, {

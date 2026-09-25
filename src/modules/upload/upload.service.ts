@@ -8,7 +8,7 @@ export class UploadService {
   async generatePresignedUrl(userId: string, dto: PresignedUploadDto) {
     const cleanFilename = dto.filename.replace(/[^a-zA-Z0-9._-]/g, '_');
     const key = `uploads/${randomUUID()}-${cleanFilename}`;
-    const baseStorageUrl = process.env.STORAGE_PUBLIC_URL || 'https://storage.hobbyhub.local';
+    const baseStorageUrl = process.env.STORAGE_PUBLIC_URL || 'https://storage.nexus.local';
     const uploadUrl = `${baseStorageUrl}/${key}?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=900&uploader=${userId}`;
     const publicUrl = `${baseStorageUrl}/${key}`;
 

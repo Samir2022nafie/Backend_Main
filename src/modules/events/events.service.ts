@@ -59,6 +59,33 @@ export class EventsService {
   }
 
   /**
+   * Helper to resolve or create a location from locationId or locationName string
+   */
+  private async resolveLocationId(locationId?: string | null, locationName?: string | null): Promise<string | null> {
+    if (locationId) return locationId;
+    if (!locationName || !locationName.trim()) return null;
+
+    const trimmed = locationName.trim();
+    const existing = await this.prisma.locations.findFirst({
+      where: { place_name: { equals: trimmed, mode: 'insensitive' } },
+    });
+    if (existing) return existing.id;
+
+    const count = await this.prisma.locations.count();
+    const lat = 9.010793 + (count * 0.001);
+    const lng = 38.761252 + (count * 0.001);
+
+    const created = await this.prisma.locations.create({
+      data: {
+        place_name: trimmed,
+        latitude: lat,
+        longitude: lng,
+      },
+    });
+    return created.id;
+  }
+
+  /**
    * Create event in a community (Member+ only)
    */
   async create(slug: string, userId: string, dto: CreateEventDto) {
@@ -86,12 +113,17 @@ export class EventsService {
     const approvalStatus = isLeadership ? 'approved' : 'proposed';
     const isVerified = isLeadership;
 
+    const resolvedLocationId = await this.resolveLocationId(
+      dto.locationId,
+      dto.location || dto.locationName
+    );
+
     const event = await this.prisma.events.create({
       data: {
         creator_id: userId,
         community_id: community.id,
         subcommunity_id: dto.subcommunityId ?? null,
-        location_id: dto.locationId ?? null,
+        location_id: resolvedLocationId,
         title: dto.title,
         description: dto.description ?? null,
         cover_image_url: dto.coverImageUrl && dto.coverImageUrl.trim() ? await resolveDirectImageUrl(dto.coverImageUrl.trim()) : null,
@@ -143,6 +175,45 @@ export class EventsService {
               type: 'event_approved' as const,
               title: 'New Community Event',
               message: `${community.name} published a new event: "${event.title}"`,
+              related_entity_type: 'event',
+              related_entity_id: event.id,
+            })),
+          });
+        }
+      } catch {}
+    } else if (event.approval_status === 'proposed') {
+      // Notify community owner and administrators about the new event proposal
+      try {
+        const leadershipMembers = await this.prisma.community_members.findMany({
+          where: {
+            community_id: community.id,
+            role: { in: ['admin', 'moderator'] },
+            user_id: { not: userId },
+          },
+          select: { user_id: true },
+        });
+
+        const targetUserIds = new Set<string>();
+        if (community.creator_id && community.creator_id !== userId) {
+          targetUserIds.add(community.creator_id);
+        }
+        leadershipMembers.forEach((m) => targetUserIds.add(m.user_id));
+
+        const proposer = await this.prisma.users.findUnique({
+          where: { id: userId },
+          select: { first_name: true, last_name: true, name: true, username: true },
+        });
+        const proposerName = proposer?.first_name
+          ? `${proposer.first_name} ${proposer.last_name || ''}`.trim()
+          : proposer?.name || (proposer?.username ? `@${proposer.username}` : 'A member');
+
+        if (targetUserIds.size > 0) {
+          await this.prisma.notifications.createMany({
+            data: Array.from(targetUserIds).map((targetId) => ({
+              user_id: targetId,
+              type: 'moderation_action' as const,
+              title: 'New Event Proposal',
+              message: `${proposerName} proposed a new event "${event.title}" in ${community.name}. Review and approve or reject it.`,
               related_entity_type: 'event',
               related_entity_id: event.id,
             })),
@@ -323,6 +394,8 @@ export class EventsService {
             slug: true,
             creator_id: true,
             is_private: true,
+            profile_picture_url: true,
+            banner_url: true,
           },
         },
         creator: {
@@ -423,6 +496,8 @@ export class EventsService {
         id: event.community.id,
         name: event.community.name,
         slug: event.community.slug,
+        profile_picture_url: event.community.profile_picture_url,
+        banner_url: event.community.banner_url,
       },
       title: event.title,
       description: event.description,
@@ -506,9 +581,13 @@ export class EventsService {
     if (dto.startsAt !== undefined) updateData.starts_at = new Date(dto.startsAt);
     if (dto.endsAt !== undefined) updateData.ends_at = dto.endsAt ? new Date(dto.endsAt) : null;
     if (dto.visibility !== undefined) updateData.visibility = dto.visibility;
-    if (dto.maxParticipants !== undefined) updateData.max_participants = dto.maxParticipants;
-    if (dto.locationId !== undefined) updateData.location_id = dto.locationId;
+    if (dto.location !== undefined || dto.locationName !== undefined || dto.locationId !== undefined) {
+      updateData.location_id = await this.resolveLocationId(dto.locationId, dto.location || dto.locationName);
+    }
     if (dto.subcommunityId !== undefined) updateData.subcommunity_id = dto.subcommunityId;
+    if (dto.maxParticipants !== undefined) {
+      updateData.max_participants = dto.maxParticipants ? Number(dto.maxParticipants) : null;
+    }
 
     const updated = await this.prisma.events.update({
       where: { id },
@@ -527,6 +606,34 @@ export class EventsService {
         location: true,
       },
     });
+
+    // Notify participants and creator about modifications
+    try {
+      const participants = await this.prisma.event_participants.findMany({
+        where: { event_id: id },
+        select: { user_id: true },
+      });
+      const recipientIds = new Set<string>(participants.map((p) => p.user_id));
+      if (event.creator_id !== userId) {
+        recipientIds.add(event.creator_id);
+      }
+      recipientIds.delete(userId);
+
+      for (const targetUserId of recipientIds) {
+        await this.prisma.notifications.create({
+          data: {
+            user_id: targetUserId,
+            type: 'event_reminder',
+            title: 'Event Updated',
+            message: `Details about "${updated.title}" have been modified.`,
+            related_entity_type: 'event',
+            related_entity_id: updated.id,
+          },
+        }).catch(() => null);
+      }
+    } catch {
+      // Non-blocking notification
+    }
 
     return {
       id: updated.id,
