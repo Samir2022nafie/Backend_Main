@@ -26,6 +26,8 @@ export const createEventSchema = z
     locationId: uuidSchema.optional(),
     location: z.string().trim().max(255).optional().nullable(),
     locationName: z.string().trim().max(255).optional().nullable(),
+    latitude: z.number().min(-90).max(90).optional().nullable(),
+    longitude: z.number().min(-180).max(180).optional().nullable(),
     subcommunityId: uuidSchema.optional(),
   })
   .refine(

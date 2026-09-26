@@ -15,10 +15,14 @@ import {
 } from './dto';
 import { resolveDirectImageUrl } from '@/core/utils/image-resolver.util';
 import { ErrorCode } from '@/core/common/enums';
+import { LocationsService } from '@/modules/locations/locations.service';
 
 @Injectable()
 export class CommunitiesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly locationsService: LocationsService,
+  ) {}
 
   /**
    * Create a new community and automatically make creator an admin member
@@ -46,7 +50,18 @@ export class CommunitiesService {
       });
     }
 
-    // 3. Atomically create community & admin membership
+    // 3. Resolve location if provided
+    let locationIdToSet = dto.locationId;
+    if (dto.locationName || dto.latitude !== undefined || dto.longitude !== undefined) {
+      locationIdToSet = await this.locationsService.resolveLocation({
+        locationId: dto.locationId,
+        locationName: dto.locationName,
+        latitude: dto.latitude,
+        longitude: dto.longitude,
+      });
+    }
+
+    // 4. Atomically create community & admin membership
     return this.prisma.$transaction(async (tx) => {
       const community = await tx.communities.create({
         data: {
@@ -56,7 +71,7 @@ export class CommunitiesService {
           rules: dto.rules,
           creator_id: userId,
           category_id: dto.categoryId,
-          location_id: dto.locationId,
+          location_id: locationIdToSet,
           banner_url: dto.bannerUrl ? await resolveDirectImageUrl(dto.bannerUrl) : null,
           profile_picture_url: dto.profilePictureUrl ? await resolveDirectImageUrl(dto.profilePictureUrl) : null,
           is_private: dto.isPrivate ?? false,
@@ -254,15 +269,35 @@ export class CommunitiesService {
     const resolvedBanner = dto.bannerUrl !== undefined ? (dto.bannerUrl ? await resolveDirectImageUrl(dto.bannerUrl) : null) : undefined;
     const resolvedAvatar = dto.profilePictureUrl !== undefined ? (dto.profilePictureUrl ? await resolveDirectImageUrl(dto.profilePictureUrl) : null) : undefined;
 
+    let locationIdToSet = community.location_id;
+    if (
+      dto.locationId !== undefined ||
+      dto.locationName !== undefined ||
+      dto.latitude !== undefined ||
+      dto.longitude !== undefined
+    ) {
+      locationIdToSet = await this.locationsService.resolveLocation({
+        locationId: dto.locationId,
+        locationName: dto.locationName,
+        latitude: dto.latitude,
+        longitude: dto.longitude,
+      });
+    }
+
     return this.prisma.communities.update({
       where: { id: community.id },
       data: {
         name: dto.name,
         description: dto.description,
         rules: dto.rules,
+        location_id: locationIdToSet,
         banner_url: resolvedBanner,
         profile_picture_url: resolvedAvatar,
         is_private: dto.isPrivate,
+      },
+      include: {
+        category: true,
+        location: true,
       },
     });
   }

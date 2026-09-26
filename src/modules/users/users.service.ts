@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '@/core/database/prisma.service';
 import { SessionService } from '@/modules/auth/session.service';
+import { LocationsService } from '@/modules/locations/locations.service';
 import { UpdateUserDto } from './dto';
 import { ErrorCode } from '@/core/common/enums';
 import { resolveDirectImageUrl } from '@/core/utils/image-resolver.util';
@@ -10,6 +11,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sessionService: SessionService,
+    private readonly locationsService: LocationsService,
   ) {}
 
   /**
@@ -59,6 +61,9 @@ export class UsersService {
         id: userId,
         deleted_at: null,
       },
+      include: {
+        location: true,
+      },
     });
 
     if (!user) {
@@ -68,7 +73,21 @@ export class UsersService {
       });
     }
 
-    return this.sanitizeUser(user);
+    const sanitized = this.sanitizeUser(user);
+    return {
+      ...sanitized,
+      isLocationPrivate: user.is_location_private,
+      is_location_private: user.is_location_private,
+      location: user.location
+        ? {
+            id: user.location.id,
+            name: user.location.place_name,
+            placeName: user.location.place_name,
+            latitude: Number(user.location.latitude),
+            longitude: Number(user.location.longitude),
+          }
+        : null,
+    };
   }
 
   /**
@@ -94,6 +113,46 @@ export class UsersService {
       ? (dto.profilePictureUrl && dto.profilePictureUrl.trim() ? await resolveDirectImageUrl(dto.profilePictureUrl.trim()) : null)
       : undefined;
 
+    let locationIdToSet = existing.location_id;
+    if (
+      dto.locationId !== undefined ||
+      dto.locationName !== undefined ||
+      dto.latitude !== undefined ||
+      dto.longitude !== undefined
+    ) {
+      // Check if user already has this exact location
+      const currentLocation = existing.location_id
+        ? await this.prisma.locations.findUnique({ where: { id: existing.location_id } })
+        : null;
+
+      const isSameCoords =
+        currentLocation &&
+        dto.latitude !== undefined &&
+        dto.latitude !== null &&
+        dto.longitude !== undefined &&
+        dto.longitude !== null &&
+        Math.abs(Number(currentLocation.latitude) - Number(dto.latitude)) < 0.0001 &&
+        Math.abs(Number(currentLocation.longitude) - Number(dto.longitude)) < 0.0001;
+
+      if (isSameCoords && currentLocation) {
+        // Same coordinates; update place name if user edited it
+        if (dto.locationName && dto.locationName.trim() && currentLocation.place_name !== dto.locationName.trim()) {
+          await this.prisma.locations.update({
+            where: { id: currentLocation.id },
+            data: { place_name: dto.locationName.trim() },
+          });
+        }
+        locationIdToSet = currentLocation.id;
+      } else {
+        locationIdToSet = await this.locationsService.resolveLocation({
+          locationId: dto.locationId,
+          locationName: dto.locationName,
+          latitude: dto.latitude,
+          longitude: dto.longitude,
+        });
+      }
+    }
+
     const updated = await this.prisma.users.update({
       where: { id: userId },
       data: {
@@ -102,10 +161,29 @@ export class UsersService {
         name: fullName,
         bio: dto.bio,
         profile_picture_url: resolvedPic,
+        location_id: locationIdToSet,
+        is_location_private: dto.isLocationPrivate !== undefined ? dto.isLocationPrivate : undefined,
+      },
+      include: {
+        location: true,
       },
     });
 
-    return this.sanitizeUser(updated);
+    const sanitized = this.sanitizeUser(updated);
+    return {
+      ...sanitized,
+      isLocationPrivate: updated.is_location_private,
+      is_location_private: updated.is_location_private,
+      location: updated.location
+        ? {
+            id: updated.location.id,
+            name: updated.location.place_name,
+            placeName: updated.location.place_name,
+            latitude: Number(updated.location.latitude),
+            longitude: Number(updated.location.longitude),
+          }
+        : null,
+    };
   }
 
   /**
@@ -173,6 +251,7 @@ export class UsersService {
     const user = await this.prisma.users.findFirst({
       where: userWhere,
       include: {
+        location: true,
         _count: {
           select: {
             followers: true,
@@ -223,6 +302,9 @@ export class UsersService {
       isFollowing = !!follow;
     }
 
+    const isSelf = currentUserId === resolvedUserId;
+    const isHidden = user.is_location_private && !isSelf;
+
     return {
       id: user.id,
       username: user.username,
@@ -240,6 +322,17 @@ export class UsersService {
       isFollowing,
       trust_score: user.trust_score ?? 50,
       trustScore: user.trust_score ?? 50,
+      isLocationPrivate: user.is_location_private,
+      is_location_private: user.is_location_private,
+      location: !isHidden && user.location
+        ? {
+            id: user.location.id,
+            name: user.location.place_name,
+            placeName: user.location.place_name,
+            latitude: Number(user.location.latitude),
+            longitude: Number(user.location.longitude),
+          }
+        : null,
     };
   }
 

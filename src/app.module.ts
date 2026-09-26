@@ -15,6 +15,7 @@ import { HangoutsModule } from './modules/hangouts/hangouts.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { UploadModule } from './modules/upload/upload.module';
+import { LocationsModule } from './modules/locations/locations.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { UploadModule } from './modules/upload/upload.module';
     ReportsModule,
     NotificationsModule,
     UploadModule,
+    LocationsModule,
   ],
 })
 export class AppModule {}

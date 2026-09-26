@@ -7,6 +7,7 @@ import {
 import { subject } from '@casl/ability';
 import { PrismaService } from '@/core/database/prisma.service';
 import { CaslAbilityFactory } from '@/core/security/casl-ability.factory';
+import { LocationsService } from '@/modules/locations/locations.service';
 import { ErrorCode } from '@/core/common/enums';
 import { resolveDirectImageUrl } from '@/core/utils/image-resolver.util';
 import {
@@ -22,6 +23,7 @@ export class EventsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly caslAbilityFactory: CaslAbilityFactory,
+    private readonly locationsService: LocationsService,
   ) {}
 
   /**
@@ -59,30 +61,20 @@ export class EventsService {
   }
 
   /**
-   * Helper to resolve or create a location from locationId or locationName string
+   * Helper to resolve or create a location from locationId, locationName, or coordinates
    */
-  private async resolveLocationId(locationId?: string | null, locationName?: string | null): Promise<string | null> {
-    if (locationId) return locationId;
-    if (!locationName || !locationName.trim()) return null;
-
-    const trimmed = locationName.trim();
-    const existing = await this.prisma.locations.findFirst({
-      where: { place_name: { equals: trimmed, mode: 'insensitive' } },
+  private async resolveLocationId(
+    locationId?: string | null,
+    locationName?: string | null,
+    latitude?: number | null,
+    longitude?: number | null,
+  ): Promise<string | null> {
+    return this.locationsService.resolveLocation({
+      locationId,
+      locationName,
+      latitude,
+      longitude,
     });
-    if (existing) return existing.id;
-
-    const count = await this.prisma.locations.count();
-    const lat = 9.010793 + (count * 0.001);
-    const lng = 38.761252 + (count * 0.001);
-
-    const created = await this.prisma.locations.create({
-      data: {
-        place_name: trimmed,
-        latitude: lat,
-        longitude: lng,
-      },
-    });
-    return created.id;
   }
 
   /**
@@ -115,7 +107,9 @@ export class EventsService {
 
     const resolvedLocationId = await this.resolveLocationId(
       dto.locationId,
-      dto.location || dto.locationName
+      dto.location || dto.locationName,
+      dto.latitude,
+      dto.longitude,
     );
 
     const event = await this.prisma.events.create({
@@ -581,8 +575,19 @@ export class EventsService {
     if (dto.startsAt !== undefined) updateData.starts_at = new Date(dto.startsAt);
     if (dto.endsAt !== undefined) updateData.ends_at = dto.endsAt ? new Date(dto.endsAt) : null;
     if (dto.visibility !== undefined) updateData.visibility = dto.visibility;
-    if (dto.location !== undefined || dto.locationName !== undefined || dto.locationId !== undefined) {
-      updateData.location_id = await this.resolveLocationId(dto.locationId, dto.location || dto.locationName);
+    if (
+      dto.location !== undefined ||
+      dto.locationName !== undefined ||
+      dto.locationId !== undefined ||
+      dto.latitude !== undefined ||
+      dto.longitude !== undefined
+    ) {
+      updateData.location_id = await this.resolveLocationId(
+        dto.locationId,
+        dto.location || dto.locationName,
+        dto.latitude,
+        dto.longitude,
+      );
     }
     if (dto.subcommunityId !== undefined) updateData.subcommunity_id = dto.subcommunityId;
     if (dto.maxParticipants !== undefined) {

@@ -104,6 +104,7 @@ model locations {
   communities communities[]
   events      events[]
   hangouts    hangouts[]
+  users       users[]
 
   @@unique([latitude, longitude], map: "uq_locations_coordinates")
 }
@@ -148,9 +149,13 @@ model users {
   profile_picture_url    String?   @db.Text
   trust_score            Int       @default(50)
   trust_score_updated_at DateTime? @db.Timestamptz(6)
+  location_id            String?   @db.Uuid
+  is_location_private    Boolean   @default(false)
   created_at             DateTime  @default(now()) @db.Timestamptz(6)
   updated_at             DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
   deleted_at              DateTime? @db.Timestamptz(6)
+
+  location               locations? @relation(fields: [location_id], references: [id], onDelete: SetNull)
 
   // Owned / Created
   owned_communities      communities[]

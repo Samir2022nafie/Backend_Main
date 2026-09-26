@@ -76,6 +76,11 @@ export const registerSchema = z
     }, {
       message: `User must be at least ${APP_CONSTANTS.MIN_USER_AGE} years old`,
     }),
+    locationId: z.string().uuid().optional().nullable(),
+    locationName: z.string().trim().max(255).optional().nullable(),
+    latitude: z.number().min(-90).max(90).optional().nullable(),
+    longitude: z.number().min(-180).max(180).optional().nullable(),
+    isLocationPrivate: z.boolean().optional(),
   })
   .refine(
     (data) => {

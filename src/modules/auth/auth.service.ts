@@ -14,6 +14,7 @@ import { PasswordService } from './password.service';
 import { SessionService, SessionMetadata } from './session.service';
 import { SMS_SERVICE, ISmsService } from '@/core/services/sms/sms.interface';
 import { EmailService } from '@/core/services/email/email.service';
+import { LocationsService } from '@/modules/locations/locations.service';
 import {
   RegisterDto,
   LoginDto,
@@ -48,6 +49,7 @@ export class AuthService {
     private readonly sessionService: SessionService,
     private readonly configService: ConfigService,
     private readonly emailService: EmailService,
+    private readonly locationsService: LocationsService,
     @Inject(SMS_SERVICE) private readonly smsService: ISmsService,
   ) {}
 
@@ -108,6 +110,22 @@ export class AuthService {
       isPhoneVerified = true;
     }
 
+    // 3.5 Resolve location if provided
+    let locationIdToSet: string | null = null;
+    if (
+      dto.locationId ||
+      dto.locationName ||
+      dto.latitude !== undefined ||
+      dto.longitude !== undefined
+    ) {
+      locationIdToSet = await this.locationsService.resolveLocation({
+        locationId: dto.locationId,
+        locationName: dto.locationName,
+        latitude: dto.latitude,
+        longitude: dto.longitude,
+      });
+    }
+
     // 4. Create user & credential row
     const user = await this.prisma.users.create({
       data: {
@@ -121,6 +139,8 @@ export class AuthService {
         name: fullName,
         birth_date: dto.birthDate,
         trust_score: 50,
+        location_id: locationIdToSet,
+        is_location_private: dto.isLocationPrivate ?? false,
         external_accounts: {
           create: {
             provider: 'credential',
@@ -128,6 +148,9 @@ export class AuthService {
             password: hashedPassword,
           },
         },
+      },
+      include: {
+        location: true,
       },
     });
 
