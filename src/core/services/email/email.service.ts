@@ -21,64 +21,51 @@ export class EmailService {
 
   /**
    * Initialise the SMTP transporter.
-   * - If SMTP_HOST is configured → use real SMTP (Gmail App Password, Brevo, SendGrid, etc.)
-   * - Otherwise → create an Ethereal test account for local dev (emails viewable in browser)
+   * - Uses real SMTP (Gmail App Password, Brevo, SendGrid, etc.) when configured.
+   * - Falls back to console logging when SMTP is not configured.
    */
   private async initTransporter(): Promise<void> {
-    const smtpHost = this.configService.get<string>('SMTP_HOST');
-    const smtpPort = this.configService.get<number>('SMTP_PORT');
-    const smtpUser = this.configService.get<string>('SMTP_USER');
-    const smtpPass = this.configService.get<string>('SMTP_PASS');
+    const smtpHost = this.configService.get<string>('SMTP_HOST') || process.env.SMTP_HOST;
+    const smtpPort = this.configService.get<number>('SMTP_PORT') || Number(process.env.SMTP_PORT) || 587;
+    const smtpUser = this.configService.get<string>('SMTP_USER') || process.env.SMTP_USER;
+    const smtpPass = this.configService.get<string>('SMTP_PASS') || process.env.SMTP_PASS;
 
     if (smtpHost && smtpUser && smtpPass) {
-      this.transporter = nodemailer.createTransport({
-        host: smtpHost,
-        port: smtpPort || 587,
-        secure: (smtpPort || 587) === 465,
-        auth: {
-          user: smtpUser,
-          pass: smtpPass,
-        },
-      });
-
-      this.logger.log(`📧 Email service configured with SMTP host: ${smtpHost}`);
-    } else {
-      // Create Ethereal test account for dev
       try {
-        const testAccount = await nodemailer.createTestAccount();
         this.transporter = nodemailer.createTransport({
-          host: 'smtp.ethereal.email',
-          port: 587,
-          secure: false,
+          host: smtpHost,
+          port: smtpPort,
+          secure: smtpPort === 465,
           auth: {
-            user: testAccount.user,
-            pass: testAccount.pass,
+            user: smtpUser,
+            pass: smtpPass,
           },
         });
 
-        this.logger.log(
-          `📧 [DEV] Email service using Ethereal test account: ${testAccount.user}`,
-        );
-        this.logger.log(
-          `📧 [DEV] View sent emails at: https://ethereal.email/login (user: ${testAccount.user}, pass: ${testAccount.pass})`,
-        );
-      } catch (err) {
-        this.logger.warn(`📧 [DEV] Could not create Ethereal test account. Emails will be logged to console only.`);
+        this.logger.log(`📧 Email service configured with SMTP host: ${smtpHost} (${smtpUser})`);
+      } catch (err: any) {
+        this.logger.warn(`📧 Could not initialize SMTP transporter: ${err.message}. Falling back to console.`);
         this.transporter = null;
       }
+    } else {
+      this.logger.log(`📧 No SMTP credentials configured. Outgoing emails will be logged to console.`);
+      this.transporter = null;
     }
   }
 
   /**
    * Send an email. Falls back to console logging if no transporter is available.
    */
-  async sendMail(options: SendMailOptions): Promise<{ success: boolean; previewUrl?: string }> {
+  async sendMail(options: SendMailOptions): Promise<{ success: boolean }> {
     await this.ready;
 
-    const fromAddress = this.configService.get<string>('SMTP_FROM') || 'Nexus <noreply@nexus.app>';
+    const fromAddress =
+      this.configService.get<string>('SMTP_FROM') ||
+      process.env.SMTP_FROM ||
+      'Nexus <noreply@nexus.app>';
 
     if (!this.transporter) {
-      this.logger.log(`📧 [CONSOLE FALLBACK] To: ${options.to} | Subject: ${options.subject}`);
+      this.logger.log(`📧 [CONSOLE EMAIL] To: ${options.to} | Subject: ${options.subject}`);
       if (options.text) this.logger.log(`📧 Body: ${options.text}`);
       if (options.html) this.logger.log(`📧 HTML: ${options.html}`);
       return { success: true };
@@ -93,17 +80,8 @@ export class EmailService {
         html: options.html,
       });
 
-      const previewUrl = nodemailer.getTestMessageUrl(info);
-      if (previewUrl) {
-        this.logger.log(`📧 [DEV] Preview email: ${previewUrl}`);
-      } else {
-        this.logger.log(`📧 Email sent to ${options.to} (messageId: ${info.messageId})`);
-      }
-
-      return {
-        success: true,
-        previewUrl: previewUrl || undefined,
-      };
+      this.logger.log(`📧 Email sent to ${options.to} (messageId: ${info.messageId})`);
+      return { success: true };
     } catch (err: any) {
       this.logger.error(`📧 Failed to send email to ${options.to}: ${err.message}`);
       return { success: false };
