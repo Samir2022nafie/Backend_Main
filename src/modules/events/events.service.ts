@@ -166,9 +166,9 @@ export class EventsService {
           await this.prisma.notifications.createMany({
             data: members.map((m) => ({
               user_id: m.user_id,
-              type: 'event_approved' as const,
+              type: 'community_new_event' as any,
               title: 'New Community Event',
-              message: `${community.name} published a new event: "${event.title}"`,
+              message: `A new event ${event.title} got posted in ${community.name}`,
               related_entity_type: 'event',
               related_entity_id: event.id,
             })),
@@ -619,18 +619,18 @@ export class EventsService {
         select: { user_id: true },
       });
       const recipientIds = new Set<string>(participants.map((p) => p.user_id));
-      if (event.creator_id !== userId) {
+      if (event.creator_id) {
         recipientIds.add(event.creator_id);
       }
-      recipientIds.delete(userId);
+      recipientIds.add(userId);
 
       for (const targetUserId of recipientIds) {
         await this.prisma.notifications.create({
           data: {
             user_id: targetUserId,
-            type: 'event_reminder',
+            type: 'event_update' as any,
             title: 'Event Updated',
-            message: `Details about "${updated.title}" have been modified.`,
+            message: `Details of the ${updated.title} event got changed`,
             related_entity_type: 'event',
             related_entity_id: updated.id,
           },
@@ -695,6 +695,33 @@ export class EventsService {
       where: { id },
       data: { deleted_at: new Date() },
     });
+
+    try {
+      const participants = await this.prisma.event_participants.findMany({
+        where: { event_id: id },
+        select: { user_id: true },
+      });
+      const recipientIds = new Set<string>(participants.map((p) => p.user_id));
+      if (event.creator_id) {
+        recipientIds.add(event.creator_id);
+      }
+      recipientIds.add(userId);
+
+      for (const targetUserId of recipientIds) {
+        await this.prisma.notifications.create({
+          data: {
+            user_id: targetUserId,
+            type: 'event_deleted' as any,
+            title: 'Event Deleted',
+            message: `Event "${event.title}" was deleted`,
+            related_entity_type: 'event',
+            related_entity_id: event.id,
+          },
+        }).catch(() => null);
+      }
+    } catch {
+      // Non-blocking
+    }
 
     return { success: true };
   }
@@ -785,6 +812,39 @@ export class EventsService {
       },
     });
 
+    try {
+      const joiner = await this.prisma.users.findUnique({
+        where: { id: userId },
+        select: { first_name: true, name: true, username: true },
+      });
+      const firstName = joiner?.first_name || joiner?.name?.split(' ')[0] || (joiner?.username ? `@${joiner.username}` : 'Someone');
+
+      const participants = await this.prisma.event_participants.findMany({
+        where: { event_id: id },
+        select: { user_id: true },
+      });
+      const recipientIds = new Set<string>(participants.map((p) => p.user_id));
+      if (event.creator_id !== userId) {
+        recipientIds.add(event.creator_id);
+      }
+      recipientIds.delete(userId);
+
+      for (const targetUserId of recipientIds) {
+        await this.prisma.notifications.create({
+          data: {
+            user_id: targetUserId,
+            type: 'event_join' as any,
+            title: 'New Event Attendee',
+            message: `${firstName} has joined the event`,
+            related_entity_type: 'event',
+            related_entity_id: event.id,
+          },
+        }).catch(() => null);
+      }
+    } catch {
+      // Non-blocking
+    }
+
     const participantsCount = await this.prisma.event_participants.count({ where: { event_id: id } });
     return { joined: true, participantsCount };
   }
@@ -826,6 +886,39 @@ export class EventsService {
           },
         },
       });
+
+      try {
+        const leaver = await this.prisma.users.findUnique({
+          where: { id: userId },
+          select: { first_name: true, name: true, username: true },
+        });
+        const firstName = leaver?.first_name || leaver?.name?.split(' ')[0] || (leaver?.username ? `@${leaver.username}` : 'Someone');
+
+        const participants = await this.prisma.event_participants.findMany({
+          where: { event_id: id },
+          select: { user_id: true },
+        });
+        const recipientIds = new Set<string>(participants.map((p) => p.user_id));
+        if (event.creator_id !== userId) {
+          recipientIds.add(event.creator_id);
+        }
+        recipientIds.delete(userId);
+
+        for (const targetUserId of recipientIds) {
+          await this.prisma.notifications.create({
+            data: {
+              user_id: targetUserId,
+              type: 'event_leave' as any,
+              title: 'Event Attendee Left',
+              message: `${firstName} has left the event`,
+              related_entity_type: 'event',
+              related_entity_id: event.id,
+            },
+          }).catch(() => null);
+        }
+      } catch {
+        // Non-blocking
+      }
     }
 
     const participantsCount = await this.prisma.event_participants.count({ where: { event_id: id } });

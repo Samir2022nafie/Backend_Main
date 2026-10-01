@@ -127,6 +127,7 @@ export class HangoutsService {
         visibility: dto.visibility ?? 'public',
         join_type: dto.joinType ?? 'open',
         max_participants: dto.maxParticipants ?? null,
+        category_id: (dto as any).categoryId || (dto as any).category_id || '3eb224da-e96f-44ad-a231-0d449e3ac69e',
       },
       include: {
         creator: {
@@ -146,6 +147,12 @@ export class HangoutsService {
             slug: true,
           },
         },
+        category: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         location: true,
       },
     });
@@ -162,6 +169,9 @@ export class HangoutsService {
       id: hangout.id,
       communityId: hangout.community_id,
       community: hangout.community,
+      categoryId: (hangout as any).category_id,
+      category_id: (hangout as any).category_id,
+      category: (hangout as any).category,
       title: hangout.title,
       description: hangout.description,
       coverImageUrl: hangout.cover_image_url,
@@ -242,6 +252,12 @@ export class HangoutsService {
               slug: true,
             },
           },
+          category: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
           location: true,
           _count: {
             select: {
@@ -265,6 +281,9 @@ export class HangoutsService {
       creator_id: h.creator_id,
       communityId: h.community_id,
       community: h.community,
+      categoryId: h.category_id,
+      category_id: h.category_id,
+      category: h.category,
       title: h.title,
       description: h.description,
       coverImageUrl: h.cover_image_url,
@@ -318,6 +337,12 @@ export class HangoutsService {
             creator_id: true,
             is_private: true,
             deleted_at: true,
+          },
+        },
+        category: {
+          select: {
+            id: true,
+            name: true,
           },
         },
         location: true,
@@ -449,6 +474,9 @@ export class HangoutsService {
       creator_id: hangout.creator_id,
       communityId: hangout.community_id,
       community: hangout.community,
+      categoryId: (hangout as any).category_id,
+      category_id: (hangout as any).category_id,
+      category: (hangout as any).category,
       title: hangout.title,
       description: hangout.description,
       coverImageUrl: hangout.cover_image_url,
@@ -519,6 +547,9 @@ export class HangoutsService {
     if (dto.maxParticipants !== undefined) {
       updateData.max_participants = dto.maxParticipants ? Number(dto.maxParticipants) : null;
     }
+    if ((dto as any).categoryId !== undefined || (dto as any).category_id !== undefined) {
+      updateData.category_id = (dto as any).categoryId || (dto as any).category_id;
+    }
 
     const updated = await this.prisma.hangouts.update({
       where: { id },
@@ -541,6 +572,12 @@ export class HangoutsService {
             slug: true,
           },
         },
+        category: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         location: true,
       },
     });
@@ -552,18 +589,18 @@ export class HangoutsService {
         select: { user_id: true },
       });
       const recipientIds = new Set<string>(participants.map((p) => p.user_id));
-      if (hangout.creator_id !== userId) {
+      if (hangout.creator_id) {
         recipientIds.add(hangout.creator_id);
       }
-      recipientIds.delete(userId);
+      recipientIds.add(userId);
 
       for (const targetUserId of recipientIds) {
         await this.prisma.notifications.create({
           data: {
             user_id: targetUserId,
-            type: 'event_reminder',
+            type: 'hangout_update' as any,
             title: 'Hangout Updated',
-            message: `Details about "${updated.title}" have been modified.`,
+            message: `Details of the hangout ${updated.title} got changed`,
             related_entity_type: 'hangout',
             related_entity_id: updated.id,
           },
@@ -577,6 +614,9 @@ export class HangoutsService {
       id: updated.id,
       communityId: updated.community_id,
       community: updated.community,
+      categoryId: (updated as any).category_id,
+      category_id: (updated as any).category_id,
+      category: (updated as any).category,
       title: updated.title,
       description: updated.description,
       coverImageUrl: updated.cover_image_url,
@@ -624,6 +664,33 @@ export class HangoutsService {
       where: { id },
       data: { deleted_at: new Date() },
     });
+
+    try {
+      const participants = await this.prisma.hangout_participants.findMany({
+        where: { hangout_id: id },
+        select: { user_id: true },
+      });
+      const recipientIds = new Set<string>(participants.map((p) => p.user_id));
+      if (hangout.creator_id) {
+        recipientIds.add(hangout.creator_id);
+      }
+      recipientIds.add(userId);
+
+      for (const targetUserId of recipientIds) {
+        await this.prisma.notifications.create({
+          data: {
+            user_id: targetUserId,
+            type: 'hangout_deleted' as any,
+            title: 'Hangout Deleted',
+            message: `Hangout "${hangout.title}" was deleted`,
+            related_entity_type: 'hangout',
+            related_entity_id: hangout.id,
+          },
+        }).catch(() => null);
+      }
+    } catch {
+      // Non-blocking
+    }
 
     return { success: true };
   }
@@ -714,29 +781,46 @@ export class HangoutsService {
       },
     });
 
-    // Only notify creator on open hangouts (for request-based, creator already knows and approved)
+    // Notify creator and other participants when someone joins
     const isRequestBased =
       hangout.join_type === 'request_based' ||
       (hangout.join_type as string) === 'REQUEST_BASED' ||
       (hangout.join_type as string) === 'request' ||
       (hangout.join_type as string) === 'REQUEST';
 
-    if (hangout.creator_id !== userId && !isRequestBased) {
-      const joiner = await this.prisma.users.findUnique({
-        where: { id: userId },
-        select: { name: true, first_name: true, last_name: true, username: true },
-      });
-      const joinerName = joiner?.first_name ? `${joiner.first_name} ${joiner.last_name || ''}`.trim() : joiner?.name || (joiner?.username ? `@${joiner.username}` : 'Someone');
-      await this.prisma.notifications.create({
-        data: {
-          user_id: hangout.creator_id,
-          type: 'hangout_approved',
-          title: 'New Hangout Participant',
-          message: `${joinerName} joined your hangout "${hangout.title}"`,
-          related_entity_type: 'hangout',
-          related_entity_id: hangout.id,
-        },
-      }).catch(() => null);
+    if (!isRequestBased) {
+      try {
+        const joiner = await this.prisma.users.findUnique({
+          where: { id: userId },
+          select: { first_name: true, name: true, username: true },
+        });
+        const firstName = joiner?.first_name || joiner?.name?.split(' ')[0] || (joiner?.username ? `@${joiner.username}` : 'Someone');
+
+        const participants = await this.prisma.hangout_participants.findMany({
+          where: { hangout_id: id },
+          select: { user_id: true },
+        });
+        const recipientIds = new Set<string>(participants.map((p) => p.user_id));
+        if (hangout.creator_id !== userId) {
+          recipientIds.add(hangout.creator_id);
+        }
+        recipientIds.delete(userId);
+
+        for (const targetUserId of recipientIds) {
+          await this.prisma.notifications.create({
+            data: {
+              user_id: targetUserId,
+              type: 'hangout_join' as any,
+              title: 'New Hangout Participant',
+              message: `${firstName} has joined the hangout`,
+              related_entity_type: 'hangout',
+              related_entity_id: hangout.id,
+            },
+          }).catch(() => null);
+        }
+      } catch {
+        // Non-blocking
+      }
     }
 
     const participantsCount = await this.prisma.hangout_participants.count({
@@ -779,23 +863,38 @@ export class HangoutsService {
         },
       });
 
-      // Notify hangout creator that participant left
-      if (hangout.creator_id !== userId) {
+      // Notify participants and creator that participant left
+      try {
         const leaver = await this.prisma.users.findUnique({
           where: { id: userId },
-          select: { name: true, first_name: true, last_name: true, username: true },
+          select: { first_name: true, name: true, username: true },
         });
-        const leaverName = leaver?.first_name ? `${leaver.first_name} ${leaver.last_name || ''}`.trim() : leaver?.name || (leaver?.username ? `@${leaver.username}` : 'Someone');
-        await this.prisma.notifications.create({
-          data: {
-            user_id: hangout.creator_id,
-            type: 'hangout_approved',
-            title: 'Hangout Participant Left',
-            message: `${leaverName} left your hangout "${hangout.title}"`,
-            related_entity_type: 'hangout',
-            related_entity_id: hangout.id,
-          },
-        }).catch(() => null);
+        const firstName = leaver?.first_name || leaver?.name?.split(' ')[0] || (leaver?.username ? `@${leaver.username}` : 'Someone');
+
+        const participants = await this.prisma.hangout_participants.findMany({
+          where: { hangout_id: id },
+          select: { user_id: true },
+        });
+        const recipientIds = new Set<string>(participants.map((p) => p.user_id));
+        if (hangout.creator_id !== userId) {
+          recipientIds.add(hangout.creator_id);
+        }
+        recipientIds.delete(userId);
+
+        for (const targetUserId of recipientIds) {
+          await this.prisma.notifications.create({
+            data: {
+              user_id: targetUserId,
+              type: 'hangout_leave' as any,
+              title: 'Hangout Participant Left',
+              message: `${firstName} has left the hangout`,
+              related_entity_type: 'hangout',
+              related_entity_id: hangout.id,
+            },
+          }).catch(() => null);
+        }
+      } catch {
+        // Non-blocking
       }
     }
 

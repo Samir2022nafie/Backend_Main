@@ -12,24 +12,44 @@ export const createEventSchema = z
       .string()
       .trim()
       .max(3000, 'Description cannot exceed 3000 characters')
-      .optional(),
-    coverImageUrl: z.string().url('Invalid cover image URL').optional().nullable().or(z.literal('')),
+      .optional()
+      .nullable(),
+    coverImageUrl: z.string().optional().nullable().or(z.literal('')),
     startsAt: z
-      .string({ required_error: 'startsAt is required' })
-      .datetime({ message: 'startsAt must be a valid ISO 8601 date string' }),
+      .union([z.string(), z.date()])
+      .refine((val) => !isNaN(new Date(val).getTime()), { message: 'Invalid start date' })
+      .transform((val) => new Date(val).toISOString()),
     endsAt: z
-      .string()
-      .datetime({ message: 'endsAt must be a valid ISO 8601 date string' })
+      .union([z.string(), z.date()])
+      .optional()
+      .nullable()
+      .refine((val) => !val || !isNaN(new Date(val).getTime()), { message: 'Invalid end date' })
+      .transform((val) => (val && String(val).trim() ? new Date(val).toISOString() : null))
       .optional(),
     visibility: z.enum(['public', 'community', 'subcommunity']).default('public').optional(),
-    maxParticipants: z.coerce.number().int().min(1, 'maxParticipants must be at least 1').optional(),
-    locationId: uuidSchema.optional(),
+    maxParticipants: z.coerce.number().int().min(1, 'maxParticipants must be at least 1').optional().nullable(),
+    locationId: uuidSchema.optional().nullable(),
     location: z.string().trim().max(255).optional().nullable(),
     locationName: z.string().trim().max(255).optional().nullable(),
     latitude: z.number().min(-90).max(90).optional().nullable(),
     longitude: z.number().min(-180).max(180).optional().nullable(),
-    subcommunityId: uuidSchema.optional(),
+    subcommunityId: uuidSchema.optional().nullable(),
   })
+  .refine(
+    (data) => {
+      // Reject Null Island (0,0) in ocean
+      if (typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+        if (Math.abs(data.latitude) < 0.0001 && Math.abs(data.longitude) < 0.0001) {
+          return false;
+        }
+      }
+      return true;
+    },
+    {
+      message: 'Location cannot be set in the ocean',
+      path: ['latitude'],
+    },
+  )
   .refine(
     (data) => {
       if (data.endsAt && new Date(data.endsAt) <= new Date(data.startsAt)) {

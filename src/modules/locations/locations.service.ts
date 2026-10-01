@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '@/core/database/prisma.service';
 import { UpsertLocationDto, ResolveLocationInput } from './dto/upsert-location.dto';
 
@@ -37,6 +37,11 @@ export class LocationsService {
     ) {
       const lat = Number(Number(latitude).toFixed(6));
       const lng = Number(Number(longitude).toFixed(6));
+
+      // Reject ocean / Null Island coordinates
+      if (Math.abs(lat) < 0.5 && Math.abs(lng) < 0.5) {
+        throw new BadRequestException('Invalid coordinates: Location cannot be placed on the ocean.');
+      }
 
       // Try finding existing location by coordinate range / precision
       let existingLoc = await this.prisma.locations.findFirst({
@@ -109,6 +114,7 @@ export class LocationsService {
         const created = await this.prisma.locations.create({
           data: {
             place_name: trimmedName,
+            place_id: 'plain_text',
             latitude: fallbackLat,
             longitude: fallbackLng,
           },
@@ -232,7 +238,14 @@ export class LocationsService {
       },
       include: {
         location: true,
-        community: { select: { id: true, name: true, slug: true } },
+        community: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            category: { select: { id: true, name: true } },
+          },
+        },
       },
       take: 200,
       orderBy: { starts_at: 'asc' },
@@ -247,6 +260,7 @@ export class LocationsService {
       },
       include: {
         location: true,
+        category: { select: { id: true, name: true } },
         creator: {
           select: {
             id: true,
@@ -319,6 +333,7 @@ export class LocationsService {
         endsAt: e.ends_at,
         communityName: e.community.name,
         communitySlug: e.community.slug,
+        category: e.community?.category?.name || 'general',
         location: {
           id: e.location!.id,
           name: e.location!.place_name,
@@ -336,6 +351,7 @@ export class LocationsService {
         joinType: h.join_type,
         maxParticipants: h.max_participants,
         participantCount: h._count.participants,
+        category: h.category?.name || 'general',
         creator: {
           id: h.creator.id,
           username: h.creator.username,

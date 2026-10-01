@@ -5,6 +5,7 @@ import {
   Delete,
   Param,
   Query,
+  Body,
 } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { CurrentUser } from '@/core/decorators/current-user.decorator';
@@ -45,6 +46,16 @@ export class NotificationsController {
   @Delete('clear-all')
   async clearAll(@CurrentUser() user: any) {
     return this.notificationsService.clearAll(user.id);
+  }
+
+  @Get('preferences')
+  async getPreferences(@CurrentUser() user: any) {
+    return this.notificationsService.getPreferences(user.id);
+  }
+
+  @Patch('preferences')
+  async updatePreferences(@CurrentUser() user: any, @Body() body: any) {
+    return this.notificationsService.updatePreferences(user.id, body);
   }
 
   @Delete(':id')
