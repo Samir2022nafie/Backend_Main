@@ -769,7 +769,11 @@ export class AuthService {
         provider_user_id: providerUserId,
       },
       include: {
-        user: true,
+        user: {
+          include: {
+            location: true,
+          },
+        },
       },
     });
 
@@ -908,6 +912,9 @@ export class AuthService {
           deleted_at: null,
           email: identifier.toLowerCase(),
         },
+        include: {
+          location: true,
+        },
       });
     }
 
@@ -921,6 +928,9 @@ export class AuthService {
           deleted_at: null,
           phone_number: normalised,
         },
+        include: {
+          location: true,
+        },
       });
     }
 
@@ -930,11 +940,28 @@ export class AuthService {
         deleted_at: null,
         username: identifier,
       },
+      include: {
+        location: true,
+      },
     });
   }
 
   private sanitizeUser(user: any): any {
     const { password_hash, ...rest } = user;
-    return rest;
+    return {
+      ...rest,
+      isLocationPrivate: user.is_location_private ?? false,
+      is_location_private: user.is_location_private ?? false,
+      location: user.location
+        ? {
+            id: user.location.id,
+            name: user.location.place_name,
+            placeName: user.location.place_name,
+            latitude: Number(user.location.latitude),
+            longitude: Number(user.location.longitude),
+            placeId: user.location.place_id,
+          }
+        : null,
+    };
   }
 }

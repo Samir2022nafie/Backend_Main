@@ -101,7 +101,10 @@ export class LocationsService {
     // 3. If only locationName was provided (user typed name without map pin)
     if (trimmedName) {
       const existingByName = await this.prisma.locations.findFirst({
-        where: { place_name: { equals: trimmedName, mode: 'insensitive' } },
+        where: {
+          place_name: { equals: trimmedName, mode: 'insensitive' },
+          place_id: 'plain_text',
+        },
       });
       if (existingByName) return existingByName.id;
 
@@ -127,7 +130,10 @@ export class LocationsService {
           err?.message?.includes('uq_locations_coordinates')
         ) {
           const fallback = await this.prisma.locations.findFirst({
-            where: { place_name: { equals: trimmedName, mode: 'insensitive' } },
+            where: {
+              place_name: { equals: trimmedName, mode: 'insensitive' },
+              place_id: 'plain_text',
+            },
           });
           if (fallback) return fallback.id;
         }
@@ -213,7 +219,18 @@ export class LocationsService {
    * Returns: communities, events, hangouts, and users who have coordinates.
    */
   async getExploreMapItems(viewerId?: string) {
-    // 1. Communities with coordinates
+    const isRealGeo = (loc: any) => {
+      if (!loc) return false;
+      if (loc.place_id === 'plain_text' || loc.placeId === 'plain_text') return false;
+      const lat = Number(loc.latitude);
+      const lng = Number(loc.longitude);
+      if (isNaN(lat) || isNaN(lng)) return false;
+      if (Math.abs(lat) < 0.0001 && Math.abs(lng) < 0.0001) return false;
+      if (loc.place_name && loc.place_name.toLowerCase().trim() === 'online') return false;
+      return true;
+    };
+
+    // 1. Communities with coordinates (exclude plain-text only)
     const communities = await this.prisma.communities.findMany({
       where: {
         deleted_at: null,
@@ -228,7 +245,7 @@ export class LocationsService {
       take: 200,
     });
 
-    // 2. Events with coordinates
+    // 2. Events with coordinates (exclude plain-text only)
     const events = await this.prisma.events.findMany({
       where: {
         deleted_at: null,
@@ -251,7 +268,7 @@ export class LocationsService {
       orderBy: { starts_at: 'asc' },
     });
 
-    // 3. Hangouts with coordinates
+    // 3. Hangouts with coordinates (exclude plain-text only)
     const hangouts = await this.prisma.hangouts.findMany({
       where: {
         deleted_at: null,
@@ -276,7 +293,7 @@ export class LocationsService {
       orderBy: { starts_at: 'asc' },
     });
 
-    // 4. Users with coordinates (privacy-filtered)
+    // 4. Users with coordinates (privacy-filtered, exclude plain-text only)
     const userWhere: any = {
       deleted_at: null,
       location_id: { not: null },
@@ -308,77 +325,93 @@ export class LocationsService {
     });
 
     return {
-      communities: communities.map((c) => ({
-        id: c.id,
-        name: c.name,
-        slug: c.slug,
-        description: c.description,
-        bannerUrl: c.banner_url,
-        profilePictureUrl: c.profile_picture_url,
-        category: c.category.name,
-        memberCount: c._count.members,
-        location: {
-          id: c.location!.id,
-          name: c.location!.place_name,
-          latitude: Number(c.location!.latitude),
-          longitude: Number(c.location!.longitude),
-        },
-      })),
-      events: events.map((e) => ({
-        id: e.id,
-        title: e.title,
-        description: e.description,
-        coverImageUrl: e.cover_image_url,
-        startsAt: e.starts_at,
-        endsAt: e.ends_at,
-        communityName: e.community.name,
-        communitySlug: e.community.slug,
-        category: e.community?.category?.name || 'general',
-        location: {
-          id: e.location!.id,
-          name: e.location!.place_name,
-          latitude: Number(e.location!.latitude),
-          longitude: Number(e.location!.longitude),
-        },
-      })),
-      hangouts: hangouts.map((h) => ({
-        id: h.id,
-        title: h.title,
-        description: h.description,
-        coverImageUrl: h.cover_image_url,
-        startsAt: h.starts_at,
-        endsAt: h.ends_at,
-        joinType: h.join_type,
-        maxParticipants: h.max_participants,
-        participantCount: h._count.participants,
-        category: h.category?.name || 'general',
-        creator: {
-          id: h.creator.id,
-          username: h.creator.username,
-          name: h.creator.name || h.creator.first_name,
-          profilePictureUrl: h.creator.profile_picture_url,
-        },
-        location: {
-          id: h.location!.id,
-          name: h.location!.place_name,
-          latitude: Number(h.location!.latitude),
-          longitude: Number(h.location!.longitude),
-        },
-      })),
-      users: users.map((u) => ({
-        id: u.id,
-        username: u.username,
-        name: u.name || `${u.first_name} ${u.last_name || ''}`.trim(),
-        profilePictureUrl: u.profile_picture_url,
-        trustScore: u.trust_score,
-        isPrivate: u.is_location_private,
-        location: {
-          id: u.location!.id,
-          name: u.location!.place_name,
-          latitude: Number(u.location!.latitude),
-          longitude: Number(u.location!.longitude),
-        },
-      })),
+      communities: communities
+        .filter((c) => isRealGeo(c.location))
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          slug: c.slug,
+          description: c.description,
+          bannerUrl: c.banner_url,
+          profilePictureUrl: c.profile_picture_url,
+          category: c.category.name,
+          memberCount: c._count.members,
+          location: {
+            id: c.location!.id,
+            name: c.location!.place_name,
+            placeName: c.location!.place_name,
+            latitude: Number(c.location!.latitude),
+            longitude: Number(c.location!.longitude),
+            placeId: c.location!.place_id,
+          },
+        })),
+      events: events
+        .filter((e) => isRealGeo(e.location))
+        .map((e) => ({
+          id: e.id,
+          title: e.title,
+          description: e.description,
+          coverImageUrl: e.cover_image_url,
+          startsAt: e.starts_at,
+          endsAt: e.ends_at,
+          communityName: e.community.name,
+          communitySlug: e.community.slug,
+          category: e.community?.category?.name || 'general',
+          location: {
+            id: e.location!.id,
+            name: e.location!.place_name,
+            placeName: e.location!.place_name,
+            latitude: Number(e.location!.latitude),
+            longitude: Number(e.location!.longitude),
+            placeId: e.location!.place_id,
+          },
+        })),
+      hangouts: hangouts
+        .filter((h) => isRealGeo(h.location))
+        .map((h) => ({
+          id: h.id,
+          title: h.title,
+          description: h.description,
+          coverImageUrl: h.cover_image_url,
+          startsAt: h.starts_at,
+          endsAt: h.ends_at,
+          joinType: h.join_type,
+          maxParticipants: h.max_participants,
+          participantCount: h._count.participants,
+          category: h.category?.name || 'general',
+          creator: {
+            id: h.creator.id,
+            username: h.creator.username,
+            name: h.creator.name || h.creator.first_name,
+            profilePictureUrl: h.creator.profile_picture_url,
+          },
+          location: {
+            id: h.location!.id,
+            name: h.location!.place_name,
+            placeName: h.location!.place_name,
+            latitude: Number(h.location!.latitude),
+            longitude: Number(h.location!.longitude),
+            placeId: h.location!.place_id,
+          },
+        })),
+      users: users
+        .filter((u) => isRealGeo(u.location))
+        .map((u) => ({
+          id: u.id,
+          username: u.username,
+          name: u.name || `${u.first_name} ${u.last_name || ''}`.trim(),
+          profilePictureUrl: u.profile_picture_url,
+          trustScore: u.trust_score,
+          isPrivate: u.is_location_private,
+          location: {
+            id: u.location!.id,
+            name: u.location!.place_name,
+            placeName: u.location!.place_name,
+            latitude: Number(u.location!.latitude),
+            longitude: Number(u.location!.longitude),
+            placeId: u.location!.place_id,
+          },
+        })),
     };
   }
 }
