@@ -108,10 +108,10 @@ export class LocationsService {
       });
       if (existingByName) return existingByName.id;
 
-      // Create fallback location with slight offset
+      // Create fallback location with slight offset (Null Island ocean, marked plain_text)
       const count = await this.prisma.locations.count();
-      const fallbackLat = Number((40.7128 + count * 0.001).toFixed(6));
-      const fallbackLng = Number((-74.0060 + count * 0.001).toFixed(6));
+      const fallbackLat = Number((0.0001 + (count % 10000) * 0.0001).toFixed(6));
+      const fallbackLng = Number((0.0001 + (count % 10000) * 0.0001).toFixed(6));
 
       try {
         const created = await this.prisma.locations.create({
