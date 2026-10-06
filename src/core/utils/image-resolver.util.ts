@@ -5,9 +5,22 @@
 export async function resolveDirectImageUrl(rawUrl?: string | null): Promise<string | null> {
   if (!rawUrl || typeof rawUrl !== 'string') return null;
   const rawTrimmed = rawUrl.trim();
-  const cropIdx = rawTrimmed.indexOf('#crop=');
-  const cleanUrl = cropIdx !== -1 ? rawTrimmed.slice(0, cropIdx).trim() : rawTrimmed;
-  const cropSuffix = cropIdx !== -1 ? rawTrimmed.slice(cropIdx).trim() : '';
+  if (rawTrimmed.startsWith('data:image/')) return rawTrimmed;
+
+  let cleanUrl = rawTrimmed;
+  let cropSuffix = '';
+
+  const hashIdx = rawTrimmed.indexOf('#crop=');
+  if (hashIdx !== -1) {
+    cleanUrl = rawTrimmed.slice(0, hashIdx).trim();
+    cropSuffix = rawTrimmed.slice(hashIdx).trim();
+  } else {
+    const queryMatch = rawTrimmed.match(/([?&]crop=[^&#]+)/);
+    if (queryMatch) {
+      cropSuffix = `#${queryMatch[1].replace(/^[?&]/, '')}`;
+      cleanUrl = rawTrimmed.replace(/[?&]crop=[^&#]+/, '').replace(/\?&/, '?').replace(/[?&]$/, '');
+    }
+  }
 
   if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) return rawTrimmed;
 

@@ -5,7 +5,19 @@ export const updateUserSchema = z
     firstName: z.string().min(1).max(50).optional(),
     lastName: z.string().max(50).optional().nullable().or(z.literal('')),
     bio: z.string().max(500).optional(),
-    profilePictureUrl: z.string().url('Invalid profile picture URL').optional().nullable().or(z.literal('')),
+    profilePictureUrl: z
+      .string()
+      .refine(
+        (val) =>
+          !val ||
+          val.trim() === '' ||
+          val.startsWith('http://') ||
+          val.startsWith('https://') ||
+          val.startsWith('data:image/'),
+        { message: 'Invalid profile picture URL' }
+      )
+      .optional()
+      .nullable(),
     locationId: z.string().uuid().optional().nullable(),
     locationName: z.string().trim().max(255).optional().nullable(),
     latitude: z.number().min(-90).max(90).optional().nullable(),

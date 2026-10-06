@@ -109,9 +109,14 @@ export class UsersService {
     const lastName = dto.lastName !== undefined ? dto.lastName : existing.last_name;
     const fullName = `${firstName} ${lastName || ''}`.trim();
 
-    const resolvedPic = dto.profilePictureUrl !== undefined
-      ? (dto.profilePictureUrl && dto.profilePictureUrl.trim() ? await resolveDirectImageUrl(dto.profilePictureUrl.trim()) : null)
-      : undefined;
+    const resolvedPic =
+      dto.profilePictureUrl !== undefined
+        ? dto.profilePictureUrl && dto.profilePictureUrl.trim()
+          ? dto.profilePictureUrl.trim().startsWith('data:image/')
+            ? dto.profilePictureUrl.trim()
+            : await resolveDirectImageUrl(dto.profilePictureUrl.trim())
+          : null
+        : undefined;
 
     let locationIdToSet = existing.location_id;
     if (

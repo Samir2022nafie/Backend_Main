@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 import { APP_CONSTANTS } from './core/common/constants';
 import { AllExceptionsFilter } from './core/filters/all-exceptions.filter';
@@ -11,6 +12,10 @@ import { AuthGuard } from './core/guards/auth.guard';
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
+
+  // Increase payload limits for base64 images
+  app.use(json({ limit: '20mb' }));
+  app.use(urlencoded({ limit: '20mb', extended: true }));
 
   // Global routing prefix: api/v1
   app.setGlobalPrefix(APP_CONSTANTS.API_PREFIX);
