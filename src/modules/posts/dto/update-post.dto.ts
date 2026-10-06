@@ -4,7 +4,15 @@ export const updatePostSchema = z
   .object({
     title: z.string().trim().min(1).max(150).optional(),
     content: z.string().trim().min(1).max(10000).optional(),
-    mediaUrl: z.string().url().optional().nullable().or(z.literal('')),
+    mediaUrl: z
+      .string()
+      .refine(
+        (val) => !val || /^(https?:\/\/|data:image\/|blob:|\/).+/i.test(val),
+        { message: 'Must be a valid URL or image URI' },
+      )
+      .optional()
+      .nullable()
+      .or(z.literal('')),
     tags: z
       .array(z.string().trim().min(1).max(50))
       .max(10)

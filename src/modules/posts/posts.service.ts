@@ -79,7 +79,12 @@ export class PostsService {
       }
     }
 
-    const resolvedMediaUrl = dto.mediaUrl && dto.mediaUrl.trim() ? await resolveDirectImageUrl(dto.mediaUrl.trim()) : null;
+    const resolvedMediaUrl =
+      dto.mediaUrl && dto.mediaUrl.trim()
+        ? dto.mediaUrl.trim().startsWith('data:image/')
+          ? dto.mediaUrl.trim()
+          : await resolveDirectImageUrl(dto.mediaUrl.trim())
+        : null;
 
     const post = await this.prisma.posts.create({
       data: {
@@ -492,7 +497,12 @@ export class PostsService {
     if (dto.title !== undefined) updateData.title = dto.title;
     if (dto.content !== undefined) updateData.content = dto.content;
     if (dto.mediaUrl !== undefined) {
-      updateData.media_url = dto.mediaUrl && dto.mediaUrl.trim() ? await resolveDirectImageUrl(dto.mediaUrl.trim()) : null;
+      updateData.media_url =
+        dto.mediaUrl && dto.mediaUrl.trim()
+          ? dto.mediaUrl.trim().startsWith('data:image/')
+            ? dto.mediaUrl.trim()
+            : await resolveDirectImageUrl(dto.mediaUrl.trim())
+          : null;
     }
 
     if (dto.tags !== undefined) {
