@@ -83,6 +83,7 @@ export class UsersService {
             id: user.location.id,
             name: user.location.place_name,
             placeName: user.location.place_name,
+            place_name: user.location.place_name,
             latitude: Number(user.location.latitude),
             longitude: Number(user.location.longitude),
           }
@@ -125,36 +126,49 @@ export class UsersService {
       dto.latitude !== undefined ||
       dto.longitude !== undefined
     ) {
-      // Check if user already has this exact location
-      const currentLocation = existing.location_id
-        ? await this.prisma.locations.findUnique({ where: { id: existing.location_id } })
-        : null;
+      const isExplicitNewLocationId = Boolean(dto.locationId && dto.locationId !== existing.location_id);
+      const targetLocationId = isExplicitNewLocationId ? dto.locationId : undefined;
 
-      const isSameCoords =
-        currentLocation &&
-        dto.latitude !== undefined &&
-        dto.latitude !== null &&
-        dto.longitude !== undefined &&
-        dto.longitude !== null &&
-        Math.abs(Number(currentLocation.latitude) - Number(dto.latitude)) < 0.0001 &&
-        Math.abs(Number(currentLocation.longitude) - Number(dto.longitude)) < 0.0001;
+      // If user cleared the location (empty name and no coordinates or explicit ID)
+      const hasNoCoords =
+        (dto.latitude === null || dto.latitude === undefined) &&
+        (dto.longitude === null || dto.longitude === undefined);
+      const hasEmptyName = dto.locationName === null || (typeof dto.locationName === 'string' && dto.locationName.trim() === '');
 
-      if (isSameCoords && currentLocation) {
-        // Same coordinates; update place name if user edited it
-        if (dto.locationName && dto.locationName.trim() && currentLocation.place_name !== dto.locationName.trim()) {
-          await this.prisma.locations.update({
-            where: { id: currentLocation.id },
-            data: { place_name: dto.locationName.trim() },
+      if (hasEmptyName && hasNoCoords && !isExplicitNewLocationId) {
+        locationIdToSet = null;
+      } else {
+        // Check if user already has this exact location
+        const currentLocation = existing.location_id
+          ? await this.prisma.locations.findUnique({ where: { id: existing.location_id } })
+          : null;
+
+        const isSameCoords =
+          currentLocation &&
+          dto.latitude !== undefined &&
+          dto.latitude !== null &&
+          dto.longitude !== undefined &&
+          dto.longitude !== null &&
+          Math.abs(Number(currentLocation.latitude) - Number(dto.latitude)) < 0.0001 &&
+          Math.abs(Number(currentLocation.longitude) - Number(dto.longitude)) < 0.0001;
+
+        if (isSameCoords && currentLocation) {
+          // Same coordinates; update place name if user edited it
+          if (dto.locationName && dto.locationName.trim() && currentLocation.place_name !== dto.locationName.trim()) {
+            await this.prisma.locations.update({
+              where: { id: currentLocation.id },
+              data: { place_name: dto.locationName.trim() },
+            });
+          }
+          locationIdToSet = currentLocation.id;
+        } else {
+          locationIdToSet = await this.locationsService.resolveLocation({
+            locationId: targetLocationId,
+            locationName: dto.locationName,
+            latitude: dto.latitude,
+            longitude: dto.longitude,
           });
         }
-        locationIdToSet = currentLocation.id;
-      } else {
-        locationIdToSet = await this.locationsService.resolveLocation({
-          locationId: dto.locationId,
-          locationName: dto.locationName,
-          latitude: dto.latitude,
-          longitude: dto.longitude,
-        });
       }
     }
 
@@ -184,6 +198,7 @@ export class UsersService {
             id: updated.location.id,
             name: updated.location.place_name,
             placeName: updated.location.place_name,
+            place_name: updated.location.place_name,
             latitude: Number(updated.location.latitude),
             longitude: Number(updated.location.longitude),
           }

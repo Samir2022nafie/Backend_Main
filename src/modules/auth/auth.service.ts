@@ -957,6 +957,7 @@ export class AuthService {
             id: user.location.id,
             name: user.location.place_name,
             placeName: user.location.place_name,
+            place_name: user.location.place_name,
             latitude: Number(user.location.latitude),
             longitude: Number(user.location.longitude),
             placeId: user.location.place_id,

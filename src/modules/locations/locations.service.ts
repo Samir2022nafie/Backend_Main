@@ -103,7 +103,6 @@ export class LocationsService {
       const existingByName = await this.prisma.locations.findFirst({
         where: {
           place_name: { equals: trimmedName, mode: 'insensitive' },
-          place_id: 'plain_text',
         },
       });
       if (existingByName) return existingByName.id;
