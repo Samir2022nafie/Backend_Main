@@ -100,17 +100,19 @@ export class EmailService {
   async sendMail(options: SendMailOptions): Promise<{ success: boolean }> {
     await this.ready;
 
-    const fromAddress =
+    let fromAddress =
       this.configService.get<string>('BREVO_FROM') ||
       process.env.BREVO_FROM ||
-      this.configService.get<string>('RESEND_FROM') ||
-      process.env.RESEND_FROM ||
       this.configService.get<string>('SMTP_FROM') ||
       process.env.SMTP_FROM ||
       'Nexus <samir2nafie@gmail.com>';
 
     // 1. Brevo HTTP REST API (No domain required, uses verified email sender, port 443)
     if (this.brevoApiKey) {
+      // Safety guard: if SMTP_FROM still has leftover onboarding@resend.dev from Resend, override it
+      if (fromAddress.includes('resend.dev')) {
+        fromAddress = 'Nexus <samir2nafie@gmail.com>';
+      }
       const sender = this.parseSender(fromAddress);
 
       try {
