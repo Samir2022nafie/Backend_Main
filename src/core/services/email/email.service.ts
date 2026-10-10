@@ -13,6 +13,7 @@ export interface SendMailOptions {
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private transporter: nodemailer.Transporter | null = null;
+  private brevoApiKey: string | null = null;
   private resendApiKey: string | null = null;
   private ready: Promise<void>;
 
@@ -23,11 +24,22 @@ export class EmailService {
   /**
    * Initialise the email transport mechanism.
    * Priority:
-   * 1. Resend HTTP REST API (port 443 / HTTPS - works on Render free tier without port blocking)
-   * 2. Real SMTP via Nodemailer (used for local development or unblocked SMTP environments)
-   * 3. Console logging fallback (when no credentials are provided)
+   * 1. Brevo HTTP REST API (port 443 / HTTPS - works without a domain via verified email sender)
+   * 2. Resend HTTP REST API (port 443 / HTTPS - works when custom domain is verified)
+   * 3. Real SMTP via Nodemailer (local dev)
+   * 4. Console logging fallback
    */
   private async initTransporter(): Promise<void> {
+    const brevoKey =
+      this.configService.get<string>('BREVO_API_KEY') ||
+      process.env.BREVO_API_KEY;
+
+    if (brevoKey) {
+      this.brevoApiKey = brevoKey.trim();
+      this.logger.log('📧 Email service configured with Brevo HTTP API (port 443 / HTTPS, no domain needed)');
+      return;
+    }
+
     const resendKey =
       this.configService.get<string>('RESEND_API_KEY') ||
       process.env.RESEND_API_KEY;
@@ -67,22 +79,73 @@ export class EmailService {
   }
 
   /**
+   * Helper to parse "Nexus <user@domain.com>" into { name, email }
+   */
+  private parseSender(rawSender: string): { name: string; email: string } {
+    const match = rawSender.match(/(?:(.+?)\s*<)?([^<>@\s]+@[^<>@\s]+)>?/);
+    return {
+      name: match?.[1]?.trim() || 'Nexus',
+      email: match?.[2]?.trim() || rawSender.trim(),
+    };
+  }
+
+  /**
    * Send an email.
-   * Uses Resend HTTP API if RESEND_API_KEY is configured,
-   * otherwise falls back to SMTP or console logging.
+   * Priority:
+   * 1. Brevo HTTP API (allows sending to ANY recipient without a domain!)
+   * 2. Resend HTTP API
+   * 3. SMTP
+   * 4. Console log
    */
   async sendMail(options: SendMailOptions): Promise<{ success: boolean }> {
     await this.ready;
 
-    // 1. Resend HTTP REST API delivery (Firewall-proof, port 443)
-    if (this.resendApiKey) {
-      const fromAddress =
-        this.configService.get<string>('RESEND_FROM') ||
-        process.env.RESEND_FROM ||
-        this.configService.get<string>('SMTP_FROM') ||
-        process.env.SMTP_FROM ||
-        'Nexus <onboarding@resend.dev>';
+    const fromAddress =
+      this.configService.get<string>('BREVO_FROM') ||
+      process.env.BREVO_FROM ||
+      this.configService.get<string>('RESEND_FROM') ||
+      process.env.RESEND_FROM ||
+      this.configService.get<string>('SMTP_FROM') ||
+      process.env.SMTP_FROM ||
+      'Nexus <samir2nafie@gmail.com>';
 
+    // 1. Brevo HTTP REST API (No domain required, uses verified email sender, port 443)
+    if (this.brevoApiKey) {
+      const sender = this.parseSender(fromAddress);
+
+      try {
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'api-key': this.brevoApiKey,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            sender: { name: sender.name, email: sender.email },
+            to: [{ email: options.to }],
+            subject: options.subject,
+            htmlContent: options.html || `<p>${options.text || ''}</p>`,
+            textContent: options.text,
+          }),
+        });
+
+        const data = (await response.json()) as any;
+
+        if (!response.ok) {
+          throw new Error(data?.message || `Brevo API returned status ${response.status}`);
+        }
+
+        this.logger.log(`📧 Email sent to ${options.to} via Brevo API (messageId: ${data?.messageId})`);
+        return { success: true };
+      } catch (err: any) {
+        this.logger.error(`📧 Failed to send email via Brevo to ${options.to}: ${err.message}`);
+        return { success: false };
+      }
+    }
+
+    // 2. Resend HTTP REST API delivery (Firewall-proof, port 443)
+    if (this.resendApiKey) {
       try {
         const response = await fetch('https://api.resend.com/emails', {
           method: 'POST',
@@ -113,13 +176,8 @@ export class EmailService {
       }
     }
 
-    // 2. SMTP delivery
+    // 3. SMTP delivery
     if (this.transporter) {
-      const fromAddress =
-        this.configService.get<string>('SMTP_FROM') ||
-        process.env.SMTP_FROM ||
-        'Nexus <noreply@nexus.app>';
-
       try {
         const info = await this.transporter.sendMail({
           from: fromAddress,
@@ -137,7 +195,7 @@ export class EmailService {
       }
     }
 
-    // 3. Console logger fallback
+    // 4. Console logger fallback
     this.logger.log(`📧 [CONSOLE EMAIL] To: ${options.to} | Subject: ${options.subject}`);
     if (options.text) this.logger.log(`📧 Body: ${options.text}`);
     if (options.html) this.logger.log(`📧 HTML: ${options.html}`);
